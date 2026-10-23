@@ -1,0 +1,52 @@
+// Opt-in check against an already bootstrapped DS Bot mock bench, never a user's DSH.
+import assert from "node:assert/strict";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { basename, join } from "node:path";
+import { tmpdir } from "node:os";
+import { chromium } from "playwright-core";
+import "./test-herdr.ts";
+import { createServer } from "../server/index.ts";
+import { BotsService } from "../server/bots.ts";
+import { BotChatService } from "../server/bot-chat.ts";
+
+const home = process.env["BOT_CHAT_TEST_HOME"] ?? "";
+const port = Number(process.env["BOT_CHAT_TEST_PORT"]);
+assert.match(basename(home), /^\.dsh-test-[a-z0-9-]+$/);
+assert.ok(Number.isInteger(port) && port > 1024 && port !== 3080);
+const url = `http://127.0.0.1:${port}`;
+const token = readFileSync(join(home, "bridge-token"), "utf8").trim();
+const bots = new BotsService({ url });
+const directory = await bots.snapshot();
+assert.equal(directory.state, "online");
+assert.equal(directory.runtimeId, readFileSync(join(home, "bot", "directory-id"), "utf8").trim());
+const chief = directory.bots.find((bot) => bot.name === "Chief")!;
+assert.ok(chief);
+const stateDir = mkdtempSync(join(tmpdir(), "ovis-dsh-chat-"));
+const server = createServer({ port: 0, hostname: "127.0.0.1", stateDir, token: "", tailscaleOwner: null, bots, botChat: new BotChatService({ url, token }) });
+const browser = await chromium.launch({ headless: true });
+try {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: "en-US" });
+  const errors: string[] = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  await page.goto(`http://127.0.0.1:${server.port}`);
+  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Bots", exact: true });
+  await dialog.locator(".bots-row").filter({ hasText: "Chief" }).click();
+  await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
+  const input = dialog.getByRole("textbox", { name: "Message Chief" });
+  const prompt = `慢慢说 Ovis bridge fixture ${crypto.randomUUID()}`;
+  const completed = dialog.locator(".bot-chat-message:not(.is-streaming)").filter({ hasText: "好，我一点一点说" });
+  const before = await completed.count();
+  await input.fill(prompt);
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await dialog.locator(".is-streaming").filter({ hasText: "好，我" }).waitFor({ timeout: 30000 });
+  await completed.nth(before).waitFor({ timeout: 30000 });
+  assert.equal(await input.inputValue(), "");
+  const userMessage = dialog.locator(".bot-chat-message.is-user").filter({ hasText: prompt });
+  assert.equal(await userMessage.count(), 1);
+  const base = `http://127.0.0.1:${server.port}`;
+  const response = await fetch(`${base}/api/bots/chat?${new URLSearchParams({ runtimeId: directory.runtimeId!, botId: chief.id })}`);
+  assert.equal(response.status, 200);
+  assert.deepEqual(errors, []);
+  console.log("PASS real DSH: authenticated history, queued send, live text deltas and persisted reply through Ovis");
+} finally { await browser.close(); server.stop(); rmSync(stateDir, { recursive: true, force: true }); }

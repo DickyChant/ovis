@@ -1,4 +1,7 @@
 export type BotStatus = "available" | "working" | "attention" | "waiting" | "unknown";
+export interface BotChatCursor { part: number; beforeSeq?: number }
+export interface BotChatItem { id: string; kind: "user" | "bot" | "divider"; text: string }
+export interface BotChatPage { sessionId: string; sendState: "ready" | "setup_required" | "read_only"; items: BotChatItem[]; cursor: BotChatCursor | null }
 export interface BotConversation {
   id: string;
   kind: "direct" | "group";

@@ -63,7 +63,6 @@ export const COMPOSER_ZH: Record<string, string> = {
   "Discard saved copy": "丢弃已保存的副本",
   "Update this PC to send messages in the next turn. Your draft stayed here.": "请更新这台电脑后再发送下一轮消息。草稿仍保留在这里。",
   "Stop agent": "停止 Agent",
-  "Send message": "发送消息",
   "Not sent: the agent is waiting for an answer in the terminal. Answer it first.": "未发送：Agent 正在终端中等待回答。请先回答。",
   "Not sent: this view only watches the pane.": "未发送：此视图仅用于查看窗格。",
   "Not sent: Claude Code's input box in the terminal is not empty. Send or clear it there, then send this message.": "未发送：终端中 Claude Code 的输入框不是空的。请先在那里发送或清除，再发送这条消息。",

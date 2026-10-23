@@ -63,7 +63,6 @@ export const CHAT_JA: Record<string, string> = {
   "failed": "失敗",
   "Error": "エラー",
   "{n} failed": "失敗 {n} 件",
-  "Loading conversation…": "会話を読み込んでいます…",
   "Waiting for the PC…": "PC の応答を待っています…",
   "The PC isn't responding": "PC が応答しません",
   "Couldn't load the conversation": "会話を読み込めませんでした",

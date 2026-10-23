@@ -63,7 +63,6 @@ export const CHAT_KO: Record<string, string> = {
   "failed": "실패",
   "Error": "오류",
   "{n} failed": "실패 {n}개",
-  "Loading conversation…": "대화를 불러오는 중…",
   "Waiting for the PC…": "PC 응답 기다리는 중…",
   "The PC isn't responding": "PC가 응답하지 않습니다",
   "Couldn't load the conversation": "대화를 불러오지 못했습니다",

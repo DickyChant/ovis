@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { chromium } from "playwright-core";
 import "./test-herdr.ts";
 import { createServer } from "../server/index.ts";
+import { BotChatService } from "../server/bot-chat.ts";
 import { BotsService } from "../server/bots.ts";
 import { demoBots } from "../site/demo/bots.ts";
 
@@ -20,14 +21,50 @@ const bots = new BotsService({ url: "http://127.0.0.1:3090", fetch: async () => 
   }
   return Response.json(value);
 } });
-const server = createServer({ port: 0, hostname: "127.0.0.1", stateDir, token: "", tailscaleOwner: null, bots });
+const chats = new Map<string, { id: string; kind: string; text: string }[]>();
+const listeners = new Map<string, Set<ReadableStreamDefaultController<Uint8Array>>>();
+const encoder = new TextEncoder();
+const emit = (botId: string, event: string, data: unknown) => {
+  for (const listener of listeners.get(botId) ?? []) listener.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+};
+let sent = 0;
+let rejectSend = false;
+let setupRequired = false;
+const botChat = new BotChatService({ url: "http://127.0.0.1:3090", token: "fixture", fetch: async (url, init) => {
+  const target = new URL(String(url));
+  const action = target.pathname.split("/").at(-1);
+  if (action === "events") {
+    const botId = target.searchParams.get("botId")!;
+    let own: ReadableStreamDefaultController<Uint8Array>;
+    const leave = () => { listeners.get(botId)?.delete(own); try { own.close(); } catch {} };
+    return new Response(new ReadableStream<Uint8Array>({ start(controller) {
+      own = controller;
+      if (!listeners.has(botId)) listeners.set(botId, new Set());
+      listeners.get(botId)!.add(own);
+      own.enqueue(encoder.encode('event: ready\ndata: {}\n\n'));
+      init.signal?.addEventListener("abort", leave, { once: true });
+    }, cancel: leave }), { headers: { "content-type": "text/event-stream" } });
+  }
+  const input = JSON.parse(String(init.body));
+  if (action === "send") {
+    sent++;
+    if (rejectSend) throw new Error("Fixture lost acknowledgement");
+    chats.set(input.botId, [...(chats.get(input.botId) ?? []), { id: `user-${sent}`, kind: "user", text: input.text }]);
+    emit(input.botId, "changed", {});
+    emit(input.botId, "stream", { attemptId: "a", phase: "start" });
+    emit(input.botId, "stream", { attemptId: "a", text: "Streaming a fictional reply" });
+    return Response.json({ accepted: true, requestId: input.requestId });
+  }
+  return Response.json({ sessionId: "s", sendState: setupRequired ? "setup_required" : "ready", cursor: null, items: chats.get(input.botId) ?? [] });
+} });
+const server = createServer({ port: 0, hostname: "127.0.0.1", stateDir, token: "", tailscaleOwner: null, bots, botChat });
 const browser = await chromium.launch({ headless: true });
 try {
   const page = await browser.newPage({ viewport: { width: 1280, height: 900 }, locale: "en-US" });
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" });
-  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  await page.getByRole("button", { name: "Bots", exact: true }).click().catch(async (error) => { console.log("Fixture page:", await page.locator("body").innerText(), errors); throw error; });
   const dialog = page.getByRole("dialog", { name: "Bots", exact: true });
   await dialog.getByRole("button", { name: /Editor.*Needs attention/ }).waitFor();
   assert.equal(await dialog.locator(".bots-row").count(), 2);
@@ -35,9 +72,34 @@ try {
   await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
   await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
   assert.equal(await dialog.getByText("Launch review", { exact: true }).count(), 1);
+  await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
+  const chiefId = demoBots().bots.find((bot) => bot.name === "Chief")!.id;
+  const composer = dialog.getByRole("textbox", { name: "Message Chief" });
+  await composer.fill("Draft kept across Bot selection");
+  await dialog.getByRole("button", { name: /Editor.*Needs attention/ }).click();
+  await dialog.getByRole("textbox", { name: "Message Editor" }).fill("Other Bot draft");
+  await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
+  assert.equal(await composer.inputValue(), "Draft kept across Bot selection");
+  await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
+  await composer.fill("A fictional user message 你好");
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await dialog.getByText("Streaming a fictional reply", { exact: true }).waitFor();
+  assert.equal(sent, 1);
+  await dialog.getByText("A fictional user message 你好", { exact: true }).waitFor();
+  chats.get(chiefId)!.push({ id: "reply-1", kind: "bot", text: "A completed fictional reply" });
+  emit(chiefId, "stream", { attemptId: "a", phase: "end" });
+  await dialog.getByText("A completed fictional reply", { exact: true }).waitFor();
+  rejectSend = true;
+  await composer.fill("Uncertain delivery draft");
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await dialog.getByRole("alert").filter({ hasText: "Send was not confirmed" }).waitFor();
+  assert.equal(await composer.inputValue(), "Uncertain delivery draft");
+  assert.equal(sent, 2);
+  rejectSend = false;
   rotated = true;
   await dialog.getByText("3 session parts", { exact: true }).waitFor({ timeout: 12000 });
   assert.equal(await dialog.locator(".bots-row").count(), 2, "part rotation does not duplicate Bots");
+  await dialog.locator(".bots-detail").evaluate((node) => { node.scrollTop = 0; });
   const evidence = process.env["UI_EVIDENCE_DIR"];
   if (evidence) { mkdirSync(evidence, { recursive: true }); await page.screenshot({ path: join(evidence, "bots-desktop.png"), animations: "disabled" }); }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -50,8 +112,18 @@ try {
   assert.equal(await dialog.getByText("Status unavailable", { exact: true }).count(), 2);
   online = true;
   await dialog.getByText("Working", { exact: true }).waitFor({ timeout: 12000 });
+  assert.equal(sent, 2, "recovery never replays the uncertain send");
+  assert.equal(await composer.inputValue(), "Uncertain delivery draft");
   await page.keyboard.press("Escape");
   await dialog.waitFor({ state: "detached" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
+  assert.equal(await composer.inputValue(), "Uncertain delivery draft", "closing the modal preserves the draft");
+  setupRequired = true;
+  emit(chiefId, "changed", {});
+  await dialog.getByText("Choose a model for this Bot in DSH before sending messages.", { exact: true }).waitFor();
+  assert.equal(await dialog.getByRole("button", { name: "Send message", exact: true }).isDisabled(), true);
   assert.deepEqual(errors, []);
-  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone and Escape");
+  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone, chat, streaming, drafts, uncertain sends and Escape");
 } finally { await browser.close(); server.stop(); rmSync(stateDir, { recursive: true, force: true }); }

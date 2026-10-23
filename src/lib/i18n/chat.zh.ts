@@ -63,7 +63,6 @@ export const CHAT_ZH: Record<string, string> = {
   "failed": "失败",
   "Error": "错误",
   "{n} failed": "{n} 个失败",
-  "Loading conversation…": "正在加载对话…",
   "Waiting for the PC…": "正在等待电脑响应…",
   "The PC isn't responding": "电脑没有响应",
   "Couldn't load the conversation": "无法加载对话",

@@ -45,7 +45,7 @@ export function parseBotDirectory(value: unknown): Pick<BotDirectory, "runtimeId
   return { runtimeId, observedAt: value.observedAt, bots };
 }
 
-async function boundedJson(response: Response): Promise<unknown> {
+export async function boundedJson(response: Response, limit = 2_000_000): Promise<unknown> {
   if (!response.body) throw new Error("Empty response");
   const reader = response.body.getReader();
   let bytes = 0;
@@ -56,7 +56,7 @@ async function boundedJson(response: Response): Promise<unknown> {
       const { done, value } = await reader.read();
       if (done) break;
       bytes += value.byteLength;
-      if (bytes > 2_000_000) throw new Error("Directory too large");
+      if (bytes > limit) throw new Error("Response too large");
       text += decoder.decode(value, { stream: true });
     }
     return JSON.parse(text + decoder.decode());

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Bot, ExternalLink, X } from "lucide-react";
 import type { BotDirectory, BotStatus } from "../../shared/bots.ts";
@@ -7,22 +7,25 @@ import { useT } from "../lib/i18n.ts";
 import { nativeModalOver, useFocusTrap } from "../lib/useFocusTrap.ts";
 import { usePhoneSheetBack } from "../lib/sheetHistory.ts";
 import "./BotsView.css";
+import { BotChat } from "./BotChat.tsx";
+import { BotDrafts } from "../lib/botDrafts.ts";
 
 const ORDER: Record<BotStatus, number> = { attention: 0, working: 1, waiting: 2, available: 3, unknown: 4 };
 
 export function BotsLauncher() {
   const t = useT();
   const [open, setOpen] = useState(false);
+  const drafts = useRef(new BotDrafts());
   const close = useCallback(() => setOpen(false), []);
   return <>
     <section className="agent-list bot-navigation" aria-label={t("Bots")}>
       <button type="button" className="btn btn-ghost" onClick={() => setOpen(true)} aria-haspopup="dialog"><Bot aria-hidden="true" />{t("Bots")}</button>
     </section>
-    {open && <BotsView onClose={close} />}
+    {open && <BotsView onClose={close} drafts={drafts.current} />}
   </>;
 }
 
-export function BotsView({ onClose }: { onClose(): void }) {
+export function BotsView({ onClose, drafts }: { onClose(): void; drafts: BotDrafts }) {
   const t = useT();
   const statusWords: Record<BotStatus, string> = { attention: t("Needs attention"), working: t("Working"), waiting: t("Waiting"), available: t("Available"), unknown: t("Status unavailable") };
   const id = useId();
@@ -78,7 +81,7 @@ export function BotsView({ onClose }: { onClose(): void }) {
         <button type="button" className="icon-button" aria-label={t("Close")} onClick={onClose}><X aria-hidden="true" /></button>
       </header>
       <div className="bots-toolbar">
-        <span>{t("Read only · chat and approvals stay in DSH")}</span>
+        <span>{t("Chat with your Bots here")}</span>
         {reachableLink && <a className="btn" href={link.href} target="_blank" rel="noopener noreferrer">{t("Open in DSH")}<ExternalLink aria-hidden="true" /></a>}
         {link && !reachableLink && <span>{t("Open DSH on the host, or configure its address for this device.")}</span>}
       </div>
@@ -94,6 +97,7 @@ export function BotsView({ onClose }: { onClose(): void }) {
         </ul>
         {bot && <article className="bots-detail" aria-label={bot.name}>
           <h3>{bot.name}</h3><p>{bot.role}</p>
+          {directory?.runtimeId && <BotChat key={key(bot.id)} runtimeId={directory.runtimeId} botId={bot.id} name={bot.name} online={online} drafts={drafts} />}
           <h4>{t("Conversations")}</h4>
           <ul>{bot.conversations.map((conversation) => <li key={conversation.id}><strong>{conversation.kind === "direct" ? t("Direct chat") : conversation.name}</strong><span>{t(conversation.sessionIds.length === 1 ? "1 session part" : "{count} session parts", { count: conversation.sessionIds.length })}</span></li>)}</ul>
           <details><summary>{t("Integration identity")}</summary><dl><dt>{t("Runtime")}</dt><dd>{directory?.runtimeId}</dd><dt>{t("Bot ID")}</dt><dd>{bot.id}</dd></dl></details>

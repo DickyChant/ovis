@@ -2646,3 +2646,11 @@ It represents persistent Bots rather than panes and uses existing Ovis tokens an
 behavior. A read-only modal preserves the existing terminal layout and the independent
 Home/Boards navigation. The integration contract and local configuration are documented
 in [docs/dsh-bots.md](docs/dsh-bots.md). No external code or assets were copied.
+
+
+### DS Bot conversations
+
+The Bots roster opens an own-chat history and composer alongside the selected Bot.
+Following Conductor's sidebar/conversation arrangement (https://www.conductor.build/changelog),
+selection preserves identity and drafts while a reply streams. Existing Ovis modal
+stacking and theme tokens remain in use; all artwork and code are local.

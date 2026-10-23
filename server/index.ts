@@ -1,5 +1,6 @@
 import "./adopt-legacy-env.ts";
 import { BotsService } from "./bots.ts";
+import { BotChatService, readBotBridgeToken } from "./bot-chat.ts";
 import { handleWorkspaceRequest } from "./workspace-routes.ts";
 import { connectionData, createCore, type SocketData } from "./core/index.ts";
 import { ClientConnectionLog } from "./client-connection-log.ts";
@@ -141,6 +142,7 @@ export function createServer(
     usage?: UsageService;
     /** Optional local DSH integration. Tests supply their own fixture source. */
     bots?: BotsService;
+    botChat?: BotChatService;
     /** Tests supply an isolated proxy service, never a user's configured instance. */
     cliProxy?: CLIProxyService;
     /** Tests use a disposable credential home and stand-in CLI binaries. */
@@ -203,6 +205,7 @@ export function createServer(
   const cliProxyRoutes = new CLIProxyRoutes(cliProxy);
   const usageLogin = options.usageLogin ?? new UsageLoginService();
   const bots = options.bots ?? new BotsService();
+  const botChat = options.botChat ?? new BotChatService();
   const usage = options.usage ?? new UsageService(undefined, undefined, (refresh) => cliProxy.report(refresh));
   const voice = options.voice ?? new VoiceService({ stateDir: options.stateDir ?? defaultStateDir(), env: process.env, fetch });
   /** a login named here is taken as it is: a tagged node has none of its own to read (OVIS_TAILSCALE_OWNER) */
@@ -329,7 +332,7 @@ export function createServer(
       const sessionHistory = /^\/api\/(?:machines\/[^/]+\/)?sessions\/history$/.test(pathname);
       // an agent's commands in a folder are read from that folder's command files, as a directory listing and a file read are
       const agentCommands = /^\/api\/(?:machines\/[^/]+\/)?agent\/commands$/.test(pathname);
-      if (readOnly && (fileRead || directoryListing || repositoryDiff || sessionHistory || agentCommands || mutating && !ownPreferences)) {
+      if (readOnly && (pathname.startsWith("/api/bots/") || fileRead || directoryListing || repositoryDiff || sessionHistory || agentCommands || mutating && !ownPreferences)) {
         setRequestRoute("watch-refusal");
         return jsonResponse({ error: { code: "read_only", message: "this device can only watch" } }, 403);
       }
@@ -427,6 +430,10 @@ export function createServer(
       if (pathname === "/api/seen") { setRequestRoute(pathname); return handleSeenRequest(request, seen); }
 
       if (pathname === "/api/bots") { setRequestRoute(pathname); return bots.handle(request); }
+      if (pathname.startsWith("/api/bots/")) {
+        setRequestRoute("/api/bots/:action");
+        return botChat.handle(request, pairedDevice ? (close) => devices.onRevoke(pairedDevice.id, close) : undefined);
+      }
       if (pathname === "/api/usage") { setRequestRoute(pathname); return handleUsageRequest(request, url, usage); }
       if (pathname === "/api/usage/login") { setRequestRoute(pathname); bunServer.timeout(request, 30); return usageLogin.handle(request, collector.trackPane); }
       if (pathname === "/api/cliproxy" || pathname.startsWith("/api/cliproxy/")) { bunServer.timeout(request, 60); return cliProxyRoutes.handle(request); }
@@ -600,7 +607,7 @@ if (import.meta.main) {
   const portal = new PortalService({ stateDir: defaultStateDir() });
   let instance: ReturnType<typeof createServer>;
   try {
-    instance = createServer({ updates, herdrUpdate: new HerdrUpdater(), portal, telemetry, bots: new BotsService({ url: process.env["OVIS_DSH_URL"], publicUrl: process.env["OVIS_DSH_PUBLIC_URL"] }), registerBridge: true, herdrProfiles: readHerdrProfiles, shellAgents: new ShellAgentLocator() });
+    instance = createServer({ updates, herdrUpdate: new HerdrUpdater(), portal, telemetry, botChat: new BotChatService({ url: process.env["OVIS_DSH_URL"], token: readBotBridgeToken(process.env["HERDR_DSH_TOKEN_FILE"]) }), bots: new BotsService({ url: process.env["OVIS_DSH_URL"], publicUrl: process.env["OVIS_DSH_PUBLIC_URL"] }), registerBridge: true, herdrProfiles: readHerdrProfiles, shellAgents: new ShellAgentLocator() });
   } catch (err) {
     const { code, syscall } = err as { code?: string; syscall?: string };
     // only the bind itself: a permission error reading a state file keeps its own message and path

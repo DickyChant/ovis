@@ -63,7 +63,6 @@ export const COMPOSER_JA: Record<string, string> = {
   "Discard saved copy": "保存したコピーを破棄",
   "Update this PC to send messages in the next turn. Your draft stayed here.": "次のターンにメッセージを送るには、このPCを更新してください。入力したメッセージはここに残っています。",
   "Stop agent": "エージェントを停止",
-  "Send message": "メッセージを送信",
   "Not sent: the agent is waiting for an answer in the terminal. Answer it first.": "未送信: エージェントがターミナルで回答を待っています。先に回答してください。",
   "Not sent: this view only watches the pane.": "未送信: この画面はペインを閲覧するだけです。",
   "Not sent: Claude Code's input box in the terminal is not empty. Send or clear it there, then send this message.": "未送信: ターミナルの Claude Code の入力欄が空ではありません。そこで送信するか消してから、このメッセージを送ってください。",
