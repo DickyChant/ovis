@@ -2637,3 +2637,12 @@ The values are the ones in `src/styles.css`.
 | Terminal content accessibility relies on xterm defaults | `PaneTerminal.tsx` | Screen-reader mode changes terminal DOM and input behavior | Decide with herdr TUI owners |
 | Drawer has no focus trap | `.sidebar.is-open` | Closed state leaves the tab order, but open-state trapping is not implemented | Add a shared focus utility |
 | Modal focus is initialized, not fully trapped | Dialog components | Escape/scrim/close work; tab containment is not shared | Add the same focus utility |
+
+## Local DS Bot directory
+
+The optional Bots view uses a status-first roster and selected details, informed by
+[Conductor workspace status navigation](https://www.conductor.build/changelog/page/9).
+It represents persistent Bots rather than panes and uses existing Ovis tokens and focus
+behavior. A read-only modal preserves the existing terminal layout and the independent
+Home/Boards navigation. The integration contract and local configuration are documented
+in [docs/dsh-bots.md](docs/dsh-bots.md). No external code or assets were copied.
