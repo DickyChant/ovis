@@ -7,6 +7,7 @@ import "./test-herdr.ts";
 import { createServer } from "../server/index.ts";
 import { BotChatService } from "../server/bot-chat.ts";
 import { BotsService } from "../server/bots.ts";
+import type { BotApproval } from "../shared/bots.ts";
 import { demoBots } from "../site/demo/bots.ts";
 
 const stateDir = mkdtempSync(join(tmpdir(), "ovis-bots-browser-"));
@@ -39,6 +40,7 @@ let rejectSend = false;
 let setupRequired = false;
 let selectedModel: string | null = "mock/one";
 let stopped = 0;
+let pendingApproval: BotApproval | null = null;
 const botChat = new BotChatService({ url: "http://127.0.0.1:3090", token: "fixture", fetch: async (url, init) => {
   const target = new URL(String(url));
   const action = target.pathname.split("/").at(-1);
@@ -55,6 +57,8 @@ const botChat = new BotChatService({ url: "http://127.0.0.1:3090", token: "fixtu
     }, cancel: leave }), { headers: { "content-type": "text/event-stream" } });
   }
   const input = JSON.parse(String(init.body));
+  if (action === "approvals") return Response.json({ items: pendingApproval ? [pendingApproval] : [] });
+  if (action === "answer") { assert.equal(input.choice, "reject"); assert.equal(input.approvalId, pendingApproval?.id); pendingApproval = null; return Response.json({ accepted: true, requestId: input.requestId }); }
   if (action === "settings") return Response.json({ model: selectedModel, writable: true, working: true, sessionId: "s", models: [{ ref: "mock/one", name: "One", provider: "Mock", available: true }, { ref: "mock/two", name: "Two", provider: "Mock", available: true }] });
   if (action === "control") {
     if (input.action === "model") { selectedModel = input.model; setupRequired = false; emit(input.botId, "changed", {}); }
@@ -87,7 +91,7 @@ try {
   await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
   await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
   await dialog.locator(".bots-conversations summary").click();
-  assert.equal(await dialog.getByText("Launch review", { exact: true }).count(), 1);
+  assert.equal(await dialog.locator(".bots-conversations").getByText("Launch review", { exact: true }).count(), 1);
   await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
   const chiefId = demoBots().bots.find((bot) => bot.name === "Chief")!.id;
   const composer = dialog.getByRole("textbox", { name: "Message Chief" });
@@ -116,6 +120,8 @@ try {
   await dialog.getByText("3 session parts", { exact: true }).waitFor({ timeout: 12000 });
   assert.equal(await dialog.locator(".bots-row").count(), 2, "part rotation does not duplicate Bots");
   await dialog.locator(".bots-detail").evaluate((node) => { node.scrollTop = 0; });
+  pendingApproval = { id: "approval-fixture", botId: chiefId, sessionId: "s", name: "Chief", tool: "bash", reason: "Run the requested fixture check", detail: "echo fictional-check", answerable: true };
+  await dialog.getByRole("button", { name: "Allow once", exact: true }).waitFor();
   const evidence = process.env["UI_EVIDENCE_DIR"];
   if (evidence) { mkdirSync(evidence, { recursive: true }); await page.screenshot({ path: join(evidence, "bots-desktop.png"), animations: "disabled" }); }
   await page.setViewportSize({ width: 390, height: 844 });
@@ -123,6 +129,8 @@ try {
   await dialog.evaluate((node) => { for (const animation of node.getAnimations()) animation.finish(); });
   assert.ok(await dialog.evaluate((node) => node.getBoundingClientRect().bottom <= window.innerHeight + 1));
   if (evidence) await page.screenshot({ path: join(evidence, "bots-phone.png"), animations: "disabled" });
+  await dialog.getByRole("button", { name: "Reject", exact: true }).click();
+  await dialog.locator(".bot-approval").waitFor({ state: "detached" });
   online = false;
   await dialog.getByText("DSH is offline. Shown Bots may be out of date.", { exact: true }).waitFor({ timeout: 12000 });
   assert.equal(await dialog.locator(".bots-roster").getByText("Status unavailable", { exact: true }).count(), 2);

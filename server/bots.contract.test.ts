@@ -52,11 +52,15 @@ test("Bot chat requires full Ovis access, same origin and an explicit send heade
     expect((await fetch(`${base}/api/bots/send`, { method: "POST", headers: { ...auth, origin: "http://evil.test", "x-ovis-bot": "1" }, body })).status).toBe(403);
     expect((await fetch(`${base}/api/bots/send`, { method: "POST", headers: { ...auth, origin: base }, body })).status).toBe(403);
     expect(calls).toBe(0);
-    for (const action of ["chat", "events", "settings"]) expect((await fetch(`${base}/api/bots/${action}?runtimeId=r&botId=b`, { headers: { cookie: `ovis_device=${watch.token}` } })).status).toBe(403);
+    for (const action of ["chat", "events", "settings", "download", "approvals"]) expect((await fetch(`${base}/api/bots/${action}?runtimeId=r&botId=b`, { headers: { cookie: `ovis_device=${watch.token}` } })).status).toBe(403);
     const control = JSON.stringify({ runtimeId: "r", botId: "b", action: "stop", sessionId: "s", requestId: "control-id-000001" });
     expect((await fetch(`${base}/api/bots/control`, { method: "POST", headers: { cookie: `ovis_device=${watch.token}`, origin: base, "x-ovis-bot": "1" }, body: control })).status).toBe(403);
     expect((await fetch(`${base}/api/bots/control`, { method: "POST", headers: { ...auth, origin: "http://evil.test", "x-ovis-bot": "1" }, body: control })).status).toBe(403);
     expect((await fetch(`${base}/api/bots/send`, { method: "POST", headers: { cookie: `ovis_device=${watch.token}`, origin: base, "x-ovis-bot": "1" }, body })).status).toBe(403);
+    for (const action of ["upload", "answer"]) {
+      expect((await fetch(`${base}/api/bots/${action}`, { method: "POST", headers: { cookie: `ovis_device=${watch.token}`, origin: base, "x-ovis-bot": "1" }, body })).status).toBe(403);
+      expect((await fetch(`${base}/api/bots/${action}`, { method: "POST", headers: { ...auth, origin: "http://evil.test", "x-ovis-bot": "1" }, body })).status).toBe(403);
+    }
     expect(calls).toBe(0);
     expect((await fetch(`${base}/api/bots/chat?runtimeId=r&botId=b`, { headers: auth })).status).toBe(200);
     expect((await fetch(`${base}/api/bots/send`, { method: "POST", headers: { ...auth, origin: base, "x-ovis-bot": "1" }, body })).status).toBe(200);

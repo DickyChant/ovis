@@ -65,3 +65,38 @@ test("SSE cancellation and device revocation release the upstream connection", a
   await reader.cancel();
   expect(removed).toBe(true);
 });
+
+test("group target and session-bound upload receipts pass through an authenticated narrow route", async () => {
+  const seen: Record<string, unknown>[] = [];
+  const service = new BotChatService({ url: "http://127.0.0.1:3096", token: "fixture", fetch: async (url, init) => {
+    const input = JSON.parse(String(init.body)); seen.push(input);
+    return url.pathname.endsWith("upload") ? Response.json({ receiptId: "receipt", sessionId: "room", name: "你好.txt", bytes: 5, private: "SECRET" }) : Response.json({ accepted: true, requestId: input.requestId });
+  } });
+  const body = { runtimeId: "r", botId: "b", roomId: "room", sessionId: "room", requestId: "files-request-0001" };
+  const upload = await service.handle(request("upload", { ...body, name: "你好.txt", data: "aGVsbG8=", path: "/SECRET" }));
+  expect(upload.status).toBe(200); expect(JSON.stringify(await upload.json())).not.toContain("SECRET");
+  expect((await service.handle(request("send", { ...body, text: "", receipts: ["receipt"] }))).status).toBe(200);
+  expect(seen[1]!.roomId).toBe("room"); expect(seen[1]!.receipts).toEqual(["receipt"]);
+  expect(seen[0]!.path).toBeUndefined();
+  expect((await service.handle(request("send", { ...body, text: "", receipts: Array(9).fill("receipt") }))).status).toBe(400);
+});
+
+test("files are downloaded as inert bytes and approval decisions never broaden permissions", async () => {
+  let calls = 0;
+  const service = new BotChatService({ url: "http://127.0.0.1:3096", token: "fixture", fetch: async (url, init) => {
+    calls++;
+    if (url.pathname.endsWith("download")) return Response.json({ name: "unsafe.html", data: Buffer.from("<script>bad()</script>").toString("base64") });
+    const input = JSON.parse(String(init.body));
+    expect(input.choice).toBe("reject"); expect(input.sessionId).toBe("s");
+    return Response.json({ accepted: true, requestId: input.requestId });
+  } });
+  const download = await service.handle(new Request(`http://localhost/api/bots/download?${target}&fileId=opaque`));
+  expect(download.headers.get("content-type")).toBe("application/octet-stream");
+  expect(download.headers.get("content-disposition")).toStartWith("attachment;");
+  expect(download.headers.get("x-content-type-options")).toBe("nosniff");
+  const body = { runtimeId: "r", botId: "b", sessionId: "s", approvalId: "a", requestId: "approval-request-1", choice: "reject" };
+  expect((await service.handle(request("answer", body))).status).toBe(200);
+  expect((await service.handle(request("answer", { ...body, choice: "always" }))).status).toBe(400);
+  expect((await service.handle(new Request("http://localhost/api/bots/answer", { method: "POST", body: JSON.stringify(body) }))).status).toBe(403);
+  expect(calls).toBe(2);
+});

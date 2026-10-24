@@ -73,7 +73,6 @@ export const MACHINES_JA: Record<string, string> = {
   "Cancel install": "インストールをキャンセル",
   "Cancel connection": "接続をキャンセル",
   "Continue in background": "バックグラウンドで続行",
-  "Reject": "拒否",
   "Trust fingerprint": "フィンガープリントを信頼",
   "Install and connect": "インストールして接続",
   "Open PC": "PC を開く",

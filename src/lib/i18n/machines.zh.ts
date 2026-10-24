@@ -73,7 +73,6 @@ export const MACHINES_ZH: Record<string, string> = {
   "Cancel install": "取消安装",
   "Cancel connection": "取消连接",
   "Continue in background": "在后台继续",
-  "Reject": "拒绝",
   "Trust fingerprint": "信任指纹",
   "Install and connect": "安装并连接",
   "Open PC": "打开 PC",

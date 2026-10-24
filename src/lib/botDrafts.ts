@@ -1,4 +1,5 @@
-export interface BotDraft { text: string; sending: boolean; uncertain: boolean }
+import type { BotUpload } from "../../shared/bots.ts";
+export interface BotDraft { text: string; sending: boolean; uncertain: boolean; files?: BotUpload[] }
 const EMPTY: BotDraft = { text: "", sending: false, uncertain: false };
 
 /** Tab-local drafts and pending sends outlive the modal and the selected Bot. */
@@ -11,7 +12,7 @@ export class BotDrafts {
     this.drafts.set(key, { ...this.get(key), ...patch });
     for (const listener of this.listeners) listener();
   }
-  accepted(key: string, text: string) {
-    this.update(key, { sending: false, uncertain: false, ...(this.get(key).text === text ? { text: "" } : {}) });
+  accepted(key: string, text: string, receipts: string[] = []) {
+    this.update(key, { files: this.get(key).files?.filter((file) => !receipts.includes(file.receiptId)), sending: false, uncertain: false, ...(this.get(key).text === text ? { text: "" } : {}) });
   }
 }

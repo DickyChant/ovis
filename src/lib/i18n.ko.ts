@@ -21,6 +21,7 @@ import { PALETTE_KO } from "./i18n/palette.ko.ts";
  * braces keep their English names.
  */
 const BASE: Record<string, string> = {
+  "Reject": "거절",
   "Loading conversation…": "대화를 불러오는 중…",
   "Send message": "메시지 보내기",
   "Back": "뒤로",

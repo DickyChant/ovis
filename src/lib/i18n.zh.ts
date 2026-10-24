@@ -25,6 +25,7 @@ import { PALETTE_ZH } from "./i18n/palette.zh.ts";
  * Placeholders in braces keep their English names.
  */
 const BASE: Record<string, string> = {
+  "Reject": "拒绝",
   "Loading conversation…": "正在加载对话…",
   "Send message": "发送消息",
   "Back": "返回",

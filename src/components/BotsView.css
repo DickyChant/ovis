@@ -75,3 +75,11 @@
   .bots-workspace .bots-caption, .bots-workspace .bots-toolbar > span, .bots-workspace .bots-updated { display: none; }
   .bot-controls label { width: 100%; }
 }
+
+.bots-conversation-picker { display: flex; align-items: center; gap: 12px; margin: 8px 0; }
+.bots-conversation-picker select { min-width: 0; max-width: 100%; padding: 8px 12px; color: var(--text); background: var(--bg); border: 1px solid var(--border); border-radius: 8px; font: inherit; }
+.bot-approvals { max-height: 32vh; overflow-y: auto; flex-shrink: 0; }
+.bot-approval { border: 1px solid var(--border); padding: 12px; margin: 8px 0; border-radius: 8px; }
+.bot-approval pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow-y: auto; }
+.bot-chat-message a { display: block; overflow-wrap: anywhere; }
+.bot-chat-composer input[type="file"] { display: block; max-width: 100%; }

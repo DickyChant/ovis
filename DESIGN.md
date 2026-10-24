@@ -2671,3 +2671,12 @@ conversation and model/stop controls itself using its theme and local bridge.
 The original DSH workspace remains a secondary entry for advanced features.
 Home and Boards keep their hash overlays; selecting a terminal leaves `/dsh`.
 Drafts live in the app for this tab, and no browser DSH credentials are needed.
+
+### Native Bot conversations (2026-10-24)
+
+Following Conductor's chat workspace beside a persistent sidebar
+(https://www.conductor.build/changelog, reviewed 2026-10-24), the existing native
+workspace gains a conversation selector, composer attachments, and pending approvals
+above history. Speaker names distinguish group replies. Ovis's own theme and controls
+are used; no external code or assets are copied. Direct-only controls disappear when
+a group is selected. No browser DSH login or iframe is needed for these actions.

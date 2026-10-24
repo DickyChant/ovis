@@ -7,10 +7,9 @@ import { useT } from "../lib/i18n.ts";
 import { nativeModalOver, useFocusTrap } from "../lib/useFocusTrap.ts";
 import { usePhoneSheetBack } from "../lib/sheetHistory.ts";
 import "./BotsView.css";
-import { BotChat } from "./BotChat.tsx";
+import { BotConversationPanel } from "./BotConversationPanel.tsx";
 import { BotDrafts } from "../lib/botDrafts.ts";
 import { navigateDshWorkspace, useDshWorkspace } from "../lib/dshWorkspace.ts";
-import { BotControls } from "./BotControls.tsx";
 
 const ORDER: Record<BotStatus, number> = { attention: 0, working: 1, waiting: 2, available: 3, unknown: 4 };
 const selectedFromUrl = () => {
@@ -114,8 +113,7 @@ export function BotsView({ onClose, drafts, workspace = false }: { onClose(): vo
         </ul>
         {bot && <article className="bots-detail" aria-label={bot.name}>
           <div className="bots-detail-heading"><h3>{bot.name}</h3><p>{bot.role}</p><span className={`bots-status is-${online ? bot.status : "unknown"}`}>{statusWords[online ? bot.status : "unknown"]}</span></div>
-          {directory?.runtimeId && <BotControls key={`controls:${key(bot.id)}`} runtimeId={directory.runtimeId} botId={bot.id} online={online} revision={revision} onChanged={() => setRevision((value) => value + 1)} />}
-          {directory?.runtimeId && <BotChat key={key(bot.id)} runtimeId={directory.runtimeId} botId={bot.id} name={bot.name} online={online} drafts={drafts} onActivity={() => setRevision((value) => value + 1)} />}
+          {directory?.runtimeId && <BotConversationPanel key={key(bot.id)} runtimeId={directory.runtimeId} bot={bot} online={online} drafts={drafts} revision={revision} onActivity={() => setRevision((value) => value + 1)} />}
           <details className="bots-conversations"><summary>{t("Conversations")}</summary>
           <ul>{bot.conversations.map((conversation) => <li key={conversation.id}><strong>{conversation.kind === "direct" ? t("Direct chat") : conversation.name}</strong><span>{t(conversation.sessionIds.length === 1 ? "1 session part" : "{count} session parts", { count: conversation.sessionIds.length })}</span></li>)}</ul>
           </details><details className="bots-identity"><summary>{t("Integration identity")}</summary><dl><dt>{t("Runtime")}</dt><dd>{directory?.runtimeId}</dd><dt>{t("Bot ID")}</dt><dd>{bot.id}</dd></dl></details>

@@ -55,8 +55,8 @@ The personal fork now supports text history, queued messages and streamed replie
 inside the Bots view. Earlier history follows DS Bot session parts. Select a Bot,
 read its own chat, and use Send message. A Bot still waiting for its initial model
 selection shows a model picker above the conversation and keeps Send disabled until configured. Drafts stay in this browser tab across Bot
-switches and leaving the workspace; reloading the page clears them. Group chats,
-attachments, rich cards and approvals remain in DSH. Message text is rendered as
+switches and leaving the workspace; reloading the page clears them. Rich interactive cards remain in DSH. The conversation selector opens existing group chats.
+Files and pending tool approvals are available in the native composer. Message text is rendered as
 plain text, without executing HTML or loading remote images.
 
 Create a random 32-byte hex credential in `~/.config/ovis-dsh/bridge-token` with
@@ -128,3 +128,33 @@ same-host frame policy. On another device, configure a reachable DSH address und
 the same hostname and a different port; HTTPS Ovis requires HTTPS DSH. It never
 redirects a phone to its own localhost or proxies DSH into Ovis's origin. The portal
 launcher is hidden for Ovis watch-only devices; DSH separately enforces its own login.
+
+## Groups, files and approvals
+
+The conversation selector lists the selected Bot's existing groups. Group sends enter
+DS Bot's ordinary room Session, preserving mentions, admin routing and member isolation.
+The native group view shows the most recent 60 log entries, including speaker names;
+full older group history and group creation/settings remain in DSH. Direct-session
+model and stop controls are hidden while a group is selected.
+
+Uploads accept up to eight generic files per message, 10 MiB per file. DSH's public
+`fileUploads` service stages an opaque receipt under the exact receiving Session.
+Only those receipts enter `sessionController.prompt`; a rotated Session requires
+reattaching. Draft files remain tab-local across navigation and are not resent after
+an uncertain acknowledgement. History file links use bounded, short-lived bridge
+handles tied to the Bot and group. Downloads are inert attachment responses, never
+HTML previews or host filesystem paths. Larger downloads remain in DSH.
+
+Direct approvals use a separate in-process owner Peer on DSH's public `$events`
+stream. Responses go through the public Connection Fetch adapter and `$events/result`
+protocol. DSH arbitrates competing UI answers and cancels the losing cards. Only
+watched Bot direct Sessions are handled; unrelated events delegate immediately.
+Closing the last native view disposes the Peer. Group approvals use DS Bot's existing
+pending-request service. Neither path changes approval policy or grants future access.
+Ovis shows tool, reason and existing DS Bot call details with explicit Allow once and
+Reject buttons. Stale, rotated, read-only or withdrawn requests are refused.
+
+All new routes (`upload`, `download`, `approvals`, `answer`) retain full Ovis access,
+mutation origin/header checks and fixed local bridge credentials. Watch devices have
+no access. A fully paired device can decide approvals under its existing Ovis authority.
+The read-only directory contract remains version 1.
