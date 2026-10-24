@@ -10,6 +10,7 @@ import { useInstallPrompt } from "../lib/install.ts";
 import { Sidebar } from "./Sidebar.tsx";
 import { AgentSidebar } from "./AgentSidebar.tsx";
 import { BotsLauncher } from "./BotsView.tsx";
+import { DshPortalLauncher } from "./DshPortal.tsx";
 import { SidebarActivityProvider, type SidebarActivity } from "../lib/sidebarActivity.tsx";
 import { UsageMeters } from "./UsageMeters.tsx";
 import "./Machines.css";
@@ -44,6 +45,7 @@ export function MachineSidebar(props: Props) {
     </div>
     <AgentSidebar machines={props.machines} selectedMachineId={props.selectedMachineId} selectedPaneId={props.selectedPaneId} stateWord={(machine) => t(STATE_WORD[machine.state])} onSelect={props.onSelect} />
     <BotsLauncher />
+    {!props.watching && <DshPortalLauncher />}
     <footer className="sidebar-footer">
       {/* browsers without an install prompt (iOS, plain HTTP) get the steps instead */}
       {!installed && <button className="btn btn-ghost sidebar-footer-action" aria-expanded={canInstall ? undefined : installHelpOpen} onClick={() => { if (canInstall) void install(); else setInstallHelpOpen(!installHelpOpen); }}><Download aria-hidden="true" />{t("Install app")}</button>}

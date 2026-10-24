@@ -91,3 +91,19 @@ For a DS Bot mock bench after its smoke suite, set `BOT_CHAT_TEST_HOME` to its
 `.dsh-test-<name>` directory and `BOT_CHAT_TEST_PORT` to its non-3080 port, then run
 `bun run check run bun scripts/bot-chat-dsh-qa.ts`. The script checks the directory
 identity against that disposable home before sending a mock prompt.
+
+
+## Embedded DSH workspace
+
+Open DSH in the Ovis sidebar opens the full DSH UI in an isolated iframe. It uses
+the DSH browser login, so models, group chats, approvals and other DSH features stay
+owned by DSH. If its login gate appears, open the startup login link printed by DSH,
+then use Reload DSH. Ovis never reads or forwards the login token. Closing the view
+closes only the frame, not the running DSH service. Escape inside DSH belongs to
+DSH's own dialogs; the outer Close DSH button is always available.
+
+The frame uses the directory's configured DSH public address and Ovis's existing
+same-host frame policy. On another device, configure a reachable DSH address under
+the same hostname and a different port; HTTPS Ovis requires HTTPS DSH. It never
+redirects a phone to its own localhost or proxies DSH into Ovis's origin. The portal
+launcher is hidden for Ovis watch-only devices; DSH separately enforces its own login.

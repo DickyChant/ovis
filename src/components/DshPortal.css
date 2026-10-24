@@ -1,0 +1,15 @@
+.dsh-navigation { padding: 0 12px 8px; }
+.dsh-navigation > button { width: 100%; justify-content: flex-start; gap: 10px; }
+.dsh-navigation svg { width: 18px; height: 18px; }
+.dsh-portal { width: calc(100vw - 32px); max-width: 1600px; height: 94dvh; max-height: 94dvh; display: flex; flex-direction: column; overflow: hidden; }
+.dsh-portal .modal-header { flex-shrink: 0; gap: 12px; }
+.dsh-portal .modal-title { flex: 1; }
+.dsh-portal-actions { display: flex; align-items: center; gap: 8px; }
+.dsh-portal-caption { flex-shrink: 0; margin: 0; padding: 8px 20px 12px; color: var(--text-dim); font-size: 12px; }
+.dsh-portal-frame { flex: 1; min-height: 0; width: 100%; border: 0; background: var(--bg); }
+.dsh-portal-notice { padding: 20px; color: var(--text-dim); }
+@media (max-width: 600px) {
+  .dsh-portal { width: calc(100vw - 8px); height: 96dvh; max-height: 96dvh; }
+  .dsh-portal .modal-header { padding: 12px; }
+  .dsh-portal-caption { padding: 4px 12px 8px; }
+}

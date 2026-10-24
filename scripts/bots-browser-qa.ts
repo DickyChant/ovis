@@ -12,7 +12,14 @@ import { demoBots } from "../site/demo/bots.ts";
 const stateDir = mkdtempSync(join(tmpdir(), "ovis-bots-browser-"));
 let online = true;
 let rotated = false;
-const bots = new BotsService({ url: "http://127.0.0.1:3090", fetch: async () => {
+let frameLoads = 0;
+const dshFrame = Bun.serve({ port: 0, hostname: "127.0.0.1", fetch(request) {
+  frameLoads++;
+  const signedIn = request.headers.get("cookie")?.includes("dsh_portal_fixture=ready");
+  return new Response(signedIn ? "<!doctype html><html lang=en><title>DSH fixture</title><h1>Fictional DSH workspace</h1><button>Models fixture</button></html>" : "<!doctype html><html lang=en><h1>DSH fixture sign-in required</h1></html>", { headers: { "content-type": "text/html" } });
+} });
+const dshAddress = `http://127.0.0.1:${dshFrame.port}/`;
+const bots = new BotsService({ url: "http://127.0.0.1:3090", publicUrl: dshAddress, fetch: async () => {
   if (!online) throw new Error("Fixture disconnected");
   const value = demoBots();
   if (rotated) {
@@ -68,7 +75,7 @@ try {
   const dialog = page.getByRole("dialog", { name: "Bots", exact: true });
   await dialog.getByRole("button", { name: /Editor.*Needs attention/ }).waitFor();
   assert.equal(await dialog.locator(".bots-row").count(), 2);
-  assert.equal(await dialog.getByRole("link", { name: "Open in DSH" }).getAttribute("href"), "http://127.0.0.1:3090/");
+  assert.equal(await dialog.getByRole("link", { name: "Open in DSH" }).getAttribute("href"), dshAddress);
   await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
   await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
   assert.equal(await dialog.getByText("Launch review", { exact: true }).count(), 1);
@@ -124,6 +131,27 @@ try {
   emit(chiefId, "changed", {});
   await dialog.getByText("Choose a model for this Bot in DSH before sending messages.", { exact: true }).waitFor();
   assert.equal(await dialog.getByRole("button", { name: "Send message", exact: true }).isDisabled(), true);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Open DSH", exact: true }).click();
+  const portal = page.getByRole("dialog", { name: "DSH workspace", exact: true });
+  const frame = portal.frameLocator("iframe");
+  await frame.getByRole("heading", { name: "DSH fixture sign-in required" }).waitFor();
+  await page.context().addCookies([{ name: "dsh_portal_fixture", value: "ready", url: dshAddress, httpOnly: true, sameSite: "Lax" }]);
+  await portal.getByRole("button", { name: "Reload DSH" }).click();
+  await frame.getByRole("heading", { name: "Fictional DSH workspace" }).waitFor();
+  assert.equal(await portal.getByRole("link", { name: "Open DSH in a new tab" }).getAttribute("href"), dshAddress);
+  assert.ok(frameLoads >= 2);
+  assert.ok(!(await portal.locator("iframe").getAttribute("sandbox"))!.includes("allow-top-navigation"));
+  if (evidence) await page.screenshot({ path: join(evidence, "dsh-portal-desktop.png"), animations: "disabled" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.ok(await portal.evaluate((node) => node.getBoundingClientRect().width <= window.innerWidth));
+  assert.ok(await portal.getByRole("button", { name: "Close DSH" }).isVisible());
+  await frame.getByRole("heading", { name: "Fictional DSH workspace" }).waitFor();
+  assert.ok(await portal.locator("iframe").evaluate((node) => node.getBoundingClientRect().height > 300));
+  await frame.locator("body").evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+  if (evidence) await page.screenshot({ path: join(evidence, "dsh-portal-phone.png"), animations: "disabled" });
+  await portal.getByRole("button", { name: "Close DSH" }).click();
+  await portal.waitFor({ state: "detached" });
   assert.deepEqual(errors, []);
-  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone, chat, streaming, drafts, uncertain sends and Escape");
-} finally { await browser.close(); server.stop(); rmSync(stateDir, { recursive: true, force: true }); }
+  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone, chat, streaming, drafts, uncertain sends, Escape and authenticated embedded DSH");
+} finally { await browser.close(); server.stop(); dshFrame.stop(); rmSync(stateDir, { recursive: true, force: true }); }

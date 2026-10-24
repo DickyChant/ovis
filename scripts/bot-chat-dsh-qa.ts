@@ -47,6 +47,16 @@ try {
   const base = `http://127.0.0.1:${server.port}`;
   const response = await fetch(`${base}/api/bots/chat?${new URLSearchParams({ runtimeId: directory.runtimeId!, botId: chief.id })}`);
   assert.equal(response.status, 200);
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  const login = readFileSync(join(home, "web.log"), "utf8").match(new RegExp(`http://127\\.0\\.0\\.1:${port}/\\?token=[^\\s]+`))?.[0];
+  assert.ok(login);
+  await page.context().request.get(login);
+  await page.getByRole("button", { name: "Open DSH", exact: true }).click();
+  const portal = page.getByRole("dialog", { name: "DSH workspace", exact: true });
+  const frame = portal.frameLocator("iframe");
+  await frame.locator("[data-bot-id]").first().waitFor({ timeout: 30000 });
+  assert.equal(await portal.locator("iframe").getAttribute("src"), `${url}/`);
+  await portal.getByRole("button", { name: "Close DSH" }).click();
   assert.deepEqual(errors, []);
-  console.log("PASS real DSH: authenticated history, queued send, live text deltas and persisted reply through Ovis");
+  console.log("PASS real DSH: authenticated history, queued send, live text deltas persisted reply and authenticated DSH iframe through Ovis");
 } finally { await browser.close(); server.stop(); rmSync(stateDir, { recursive: true, force: true }); }

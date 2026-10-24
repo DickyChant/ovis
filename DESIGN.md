@@ -2654,3 +2654,11 @@ The Bots roster opens an own-chat history and composer alongside the selected Bo
 Following Conductor's sidebar/conversation arrangement (https://www.conductor.build/changelog),
 selection preserves identity and drafts while a reply streams. Existing Ovis modal
 stacking and theme tokens remain in use; all artwork and code are local.
+
+
+### Embedded DSH workspace
+
+Conductor's local-app entry points (https://www.conductor.build/changelog) keep the
+app address and an explicit open control available. This portal reuses Ovis's own
+WebPanel framing and controls, with a larger modal for DSH's full workspace. It keeps
+DSH on its own origin and login, with Reload, new-tab and Close always outside the frame.
