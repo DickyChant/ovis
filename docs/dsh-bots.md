@@ -1,14 +1,14 @@
 # Local DS Bot integration
 
-This fork offers a Bots directory and direct conversations from the sidebar. DSH owns chat,
+Open `/dsh` or choose **Bots** for the native Ovis workspace. This fork offers a Bots directory and direct conversations from the sidebar. DSH owns chat,
 execution, memory and approvals. A Bot appears once even when it works in several groups
 or continues a conversation in a new session part. The view refreshes every five seconds
 while open; disconnected results are explicitly stale and have unknown activity.
 
 ## Setup
 
-Run the DS Bot fork's `feat/ovis-chat` branch and the Herdr plugin fork's
-`feat/bot-chat` branch in the same DSH Web profile. The former supplies the
+Run the DS Bot fork's `feat/ovis-controls` branch and the Herdr plugin fork's
+`feat/bot-controls` branch in the same DSH Web profile. The former supplies the
 `botDirectory` Cordis service; the latter serves its metadata at `GET /herdr-bots`.
 An older DS Bot remains usable, but the directory reports that its source is unavailable.
 
@@ -54,8 +54,8 @@ deep links, HTML injection and sidebar-footer hooks are unchanged.
 The personal fork now supports text history, queued messages and streamed replies
 inside the Bots view. Earlier history follows DS Bot session parts. Select a Bot,
 read its own chat, and use Send message. A Bot still waiting for its initial model
-selection shows a setup notice and keeps Send disabled until configured in DSH. Drafts stay in this browser tab across Bot
-switches and closing the modal; reloading the page clears them. Group chats,
+selection shows a model picker above the conversation and keeps Send disabled until configured. Drafts stay in this browser tab across Bot
+switches and leaving the workspace; reloading the page clears them. Group chats,
 attachments, rich cards and approvals remain in DSH. Message text is rendered as
 plain text, without executing HTML or loading remote images.
 
@@ -80,6 +80,27 @@ again. Deduplication is not promised across a DSH restart.
 Design reference: [Conductor](https://www.conductor.build/changelog) separates the
 agent list from the active conversation and keeps follow-up messages in the composer.
 This view follows that arrangement using Ovis's existing modal, theme and controls.
+
+## Native model and stop controls
+
+`GET /api/bots/settings` returns bounded model metadata and the current direct
+session. `POST /api/bots/control` accepts only `model` or `stop`, a runtime/Bot
+identity and a request ID. Both require full Ovis access; writes also require the
+same-origin and `x-ovis-bot` checks used for sending. The Node plugin exposes
+the corresponding authenticated `/herdr-bots/settings` and `/herdr-bots/control`
+routes. No DSH cookie, browser token, or iframe participates in this native view.
+
+Choosing the initial model starts DS Bot's normal welcome reply. Stop cancels
+only the displayed direct session and refuses a session that rotated. It does
+not stop group work, delete queued messages, or answer approvals. On an uncertain
+response the UI refreshes state and asks the user to check it before trying again.
+Model and stop controls require the updated plugins; older plugins can still
+serve chat while controls show as unavailable.
+
+The `/dsh` route survives reload, preserves selected Bot identity in its URL, and
+supports browser Back/Forward. Home and Boards can open over it. Selecting a
+terminal returns to the ordinary Ovis pane view. The original DSH entry still
+uses DSH's separate login for advanced features.
 
 
 ## Verification

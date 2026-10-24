@@ -37,6 +37,8 @@ const emit = (botId: string, event: string, data: unknown) => {
 let sent = 0;
 let rejectSend = false;
 let setupRequired = false;
+let selectedModel: string | null = "mock/one";
+let stopped = 0;
 const botChat = new BotChatService({ url: "http://127.0.0.1:3090", token: "fixture", fetch: async (url, init) => {
   const target = new URL(String(url));
   const action = target.pathname.split("/").at(-1);
@@ -53,6 +55,12 @@ const botChat = new BotChatService({ url: "http://127.0.0.1:3090", token: "fixtu
     }, cancel: leave }), { headers: { "content-type": "text/event-stream" } });
   }
   const input = JSON.parse(String(init.body));
+  if (action === "settings") return Response.json({ model: selectedModel, writable: true, working: true, sessionId: "s", models: [{ ref: "mock/one", name: "One", provider: "Mock", available: true }, { ref: "mock/two", name: "Two", provider: "Mock", available: true }] });
+  if (action === "control") {
+    if (input.action === "model") { selectedModel = input.model; setupRequired = false; emit(input.botId, "changed", {}); }
+    else { stopped++; assert.equal(input.sessionId, "s"); }
+    return Response.json({ accepted: true, requestId: input.requestId });
+  }
   if (action === "send") {
     sent++;
     if (rejectSend) throw new Error("Fixture lost acknowledgement");
@@ -71,13 +79,14 @@ try {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.port}`, { waitUntil: "load" });
-  await page.getByRole("button", { name: "Bots", exact: true }).click().catch(async (error) => { console.log("Fixture page:", await page.locator("body").innerText(), errors); throw error; });
-  const dialog = page.getByRole("dialog", { name: "Bots", exact: true });
+  await page.getByRole("link", { name: "Bots", exact: true }).click().catch(async (error) => { console.log("Fixture page:", await page.locator("body").innerText(), errors); throw error; });
+  const dialog = page.getByRole("main", { name: "DSH workspace", exact: true });
   await dialog.getByRole("button", { name: /Editor.*Needs attention/ }).waitFor();
   assert.equal(await dialog.locator(".bots-row").count(), 2);
   assert.equal(await dialog.getByRole("link", { name: "Open in DSH" }).getAttribute("href"), dshAddress);
   await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
   await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
+  await dialog.locator(".bots-conversations summary").click();
   assert.equal(await dialog.getByText("Launch review", { exact: true }).count(), 1);
   await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
   const chiefId = demoBots().bots.find((bot) => bot.name === "Chief")!.id;
@@ -116,22 +125,41 @@ try {
   if (evidence) await page.screenshot({ path: join(evidence, "bots-phone.png"), animations: "disabled" });
   online = false;
   await dialog.getByText("DSH is offline. Shown Bots may be out of date.", { exact: true }).waitFor({ timeout: 12000 });
-  assert.equal(await dialog.getByText("Status unavailable", { exact: true }).count(), 2);
+  assert.equal(await dialog.locator(".bots-roster").getByText("Status unavailable", { exact: true }).count(), 2);
   online = true;
-  await dialog.getByText("Working", { exact: true }).waitFor({ timeout: 12000 });
+  await dialog.locator(".bots-roster").getByText("Working", { exact: true }).waitFor({ timeout: 12000 });
   assert.equal(sent, 2, "recovery never replays the uncertain send");
   assert.equal(await composer.inputValue(), "Uncertain delivery draft");
-  await page.keyboard.press("Escape");
+  await dialog.getByRole("button", { name: "Back to terminals" }).click();
   await dialog.waitFor({ state: "detached" });
   await page.setViewportSize({ width: 1280, height: 900 });
-  await page.getByRole("button", { name: "Bots", exact: true }).click();
+  await page.getByRole("link", { name: "Bots", exact: true }).click();
   await dialog.getByRole("button", { name: /Chief.*Working/ }).click();
-  assert.equal(await composer.inputValue(), "Uncertain delivery draft", "closing the modal preserves the draft");
-  setupRequired = true;
+  assert.equal(await composer.inputValue(), "Uncertain delivery draft", "leaving the workspace preserves the draft");
+  setupRequired = true; selectedModel = null;
   emit(chiefId, "changed", {});
-  await dialog.getByText("Choose a model for this Bot in DSH before sending messages.", { exact: true }).waitFor();
+  await dialog.getByText("Choose a model above before sending messages.", { exact: true }).waitFor();
   assert.equal(await dialog.getByRole("button", { name: "Send message", exact: true }).isDisabled(), true);
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await dialog.getByRole("button", { name: "Refresh Bots" }).click();
+  await dialog.getByRole("combobox", { name: "Bot model" }).selectOption("mock/two");
+  await dialog.getByRole("button", { name: "Apply model" }).click();
+  await dialog.getByText("Choose a model above before sending messages.", { exact: true }).waitFor({ state: "detached" });
+  assert.equal(selectedModel, "mock/two");
+  await dialog.getByRole("button", { name: "Stop reply" }).click();
+  await page.waitForResponse((response) => response.url().includes("/api/bots/settings"));
+  assert.equal(stopped, 1);
+  assert.equal(await page.locator("iframe").count(), 0, "native workspace needs no DSH frame or cookie");
+  assert.equal(new URL(page.url()).pathname, "/dsh");
+  await dialog.getByRole("searchbox", { name: "Find a Bot" }).fill("Chief");
+  assert.equal(await dialog.locator(".bots-row").count(), 1);
+  await dialog.getByRole("searchbox", { name: "Find a Bot" }).fill("");
+  await page.reload();
+  await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
+  await page.goBack();
+  await dialog.waitFor({ state: "detached" });
+  await page.goForward();
+  await dialog.getByRole("heading", { name: "Chief", exact: true }).waitFor();
+  await dialog.getByRole("button", { name: "Back to terminals", exact: true }).click();
   await page.getByRole("button", { name: "Open DSH", exact: true }).click();
   const portal = page.getByRole("dialog", { name: "DSH workspace", exact: true });
   const frame = portal.frameLocator("iframe");
@@ -153,5 +181,5 @@ try {
   await portal.getByRole("button", { name: "Close DSH" }).click();
   await portal.waitFor({ state: "detached" });
   assert.deepEqual(errors, []);
-  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone, chat, streaming, drafts, uncertain sends, Escape and authenticated embedded DSH");
+  console.log("PASS Bots: roster, group work, part rotation, stale status, recovery, desktop/phone, chat, streaming, drafts, uncertain sends, native /dsh navigation, model/stop controls and authenticated embedded DSH");
 } finally { await browser.close(); server.stop(); dshFrame.stop(); rmSync(stateDir, { recursive: true, force: true }); }

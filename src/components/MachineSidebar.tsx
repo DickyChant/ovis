@@ -44,7 +44,7 @@ export function MachineSidebar(props: Props) {
       <p className={loadingWords === null ? "visually-hidden" : "tree-state"} role="status">{loadingWords}</p>
     </div>
     <AgentSidebar machines={props.machines} selectedMachineId={props.selectedMachineId} selectedPaneId={props.selectedPaneId} stateWord={(machine) => t(STATE_WORD[machine.state])} onSelect={props.onSelect} />
-    <BotsLauncher />
+    {!props.watching && <BotsLauncher />}
     {!props.watching && <DshPortalLauncher />}
     <footer className="sidebar-footer">
       {/* browsers without an install prompt (iOS, plain HTTP) get the steps instead */}

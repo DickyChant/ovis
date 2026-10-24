@@ -34,6 +34,8 @@ import { CommandPalette } from "./components/CommandPalette.tsx";
 import { paletteOpenQuery } from "./lib/paletteSeed.ts";
 import { MachineContext } from "./lib/machineContext.tsx";
 import { MachineActionBanner, MachineSidebar } from "./components/MachineSidebar.tsx";
+import { BotsView } from "./components/BotsView.tsx";
+import { isDshWorkspace, navigateDshWorkspace, useBotWorkspace } from "./lib/dshWorkspace.ts";
 import { SidebarResizer } from "./components/SidebarResizer.tsx";
 import { storedSidebarWidth } from "./lib/sidebarWidth.ts";
 import { receiveSeen } from "./lib/seenFinishes.ts";
@@ -363,6 +365,7 @@ export function App() {
   const [autoSelected, setAutoSelected] = useState(false);
   // a phone opened by a link that says so starts with its drawer out (lib/deepLink.ts)
   const [drawerOpen, setDrawerOpen] = useState(() => initialLink?.sidebar === "shown" && window.matchMedia?.("(min-width: 769px)").matches !== true);
+  const { active: dshWorkspace, drafts: botDrafts } = useBotWorkspace(setDrawerOpen);
   const drawerOpenRef = useRef(drawerOpen); drawerOpenRef.current = drawerOpen;
   // from 769px the drawer is a plain sidebar column and its toggle is hidden, so a drawer a
   // narrow window opened must not come back (with its scrim) the next time the window narrows
@@ -862,6 +865,10 @@ export function App() {
   const selectedMachineRef = useRef(selectedMachineId);
   selectedMachineRef.current = selectedMachineId;
   const selectTarget = useCallback((machineId: string, paneId: string | null, view?: PaneView) => {
+    if (isDshWorkspace()) {
+      window.history.pushState(null, "", "/");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
     // Only another PC mounts a new terminal (and socket), which reports its own state. A pane
     // on the same PC keeps the connected socket, which never reports again: resetting here
     // left the header on "reconnecting" after every pane switch.
@@ -1060,7 +1067,7 @@ export function App() {
   const paneInFront = useCallback(() => locked === false && linkLanded && pendingFile.current === null && pendingCreate.current === null
     && !drawerOpen && !settingsOpen && !newSessionOpen
     && !filesOpen && !machineDialog && !paletteOpen && !diffViewing && !(viewing && !fileDocked)
-    && !dialogCover && !paneCovered()
+    && !isDshWorkspace() && !dialogCover && !paneCovered()
     && contentReady && paneContentPresented(contentKey),
   [locked, linkLanded, drawerOpen, settingsOpen, newSessionOpen, filesOpen, machineDialog, paletteOpen, diffViewing, viewing, fileDocked, dialogCover, contentReady, contentKey]);
   // one source for the sidebar's two lists: live counters per PC and finishes looked at here
@@ -1270,7 +1277,7 @@ export function App() {
     if (fileLeft) releaseFile();
   }, [fileLeft, releaseFile]);
   useEffect(() => {
-    if (locked !== false || machines.length === 0 || snapshot === null || linkWorkspaceId === undefined || !linkLanded) return;
+    if (isDshWorkspace() || locked !== false || machines.length === 0 || snapshot === null || linkWorkspaceId === undefined || !linkLanded) return;
     const link: AppLink = {
       machine: selectedMachineId, workspace: linkWorkspaceId, workspaceSlug: linkSlug, pane: selectedPaneId, view: selectedPaneId ? view : null, file: linkFile,
       settings: settingsOpen ? settingsPage : null, section: settingsOpen && settingsPage === settingsLinkPage ? settingsLinkSection : null,
@@ -1308,6 +1315,7 @@ export function App() {
   // are its module's (lib/settingsHistory.ts)
   useEffect(() => {
     const onPop = (event: PopStateEvent): void => {
+      if (isDshWorkspace()) return;
       if (settingsEntry(event.state) !== null) return;
       // a phone's sheet closing itself steps off its entry: not a Back, and what its item opened (a
       // worktree's shell, before the roster lists it) is written over the address once it is listed
@@ -1651,7 +1659,7 @@ export function App() {
           </button>
         </div>
         <HeaderNote note={note} />
-        {note !== null ? null : selectedPane && crumb ? (
+        {note !== null ? null : !dshWorkspace && selectedPane && crumb ? (
           <div className="context" title={crumb.tooltip}>
             <div className="context-title">
               {selectedAgent && <AgentMark agent={selectedAgent} size={18} />}
@@ -1672,7 +1680,7 @@ export function App() {
         ) : (
           <><Brand /><span className="machine-context-name">{selectedMachine?.name ?? selectedMachineId}</span></>
         )}
-        {selectedPane && (
+        {!dshWorkspace && selectedPane && (
           <div className="segmented view-switch" role="group" aria-label="Pane view">
             <button type="button" aria-pressed={view === "chat"} onClick={() => { setView("chat"); setDrawerOpen(false); }} title={t("Chat transcript (⌘⇧J)")}>
               <MessageSquare />
@@ -1685,7 +1693,7 @@ export function App() {
             </button>
           </div>
         )}
-        {selectedPane && wideScreen && (
+        {!dshWorkspace && selectedPane && wideScreen && (
           <>
             {/* opens Files, it is no third lens: set apart from the switch by a hairline */}
             <span className="header-divider" aria-hidden="true" />
@@ -1759,7 +1767,8 @@ export function App() {
         {/* a file path in the chat opens in the viewer, relative to the selected pane's folder */}
         <OpenFileContext.Provider value={selectedPaneId !== null ? viewFile : null}>
         <WebPanelContext.Provider value={filePanelAvailable ? openWebPage : null}>
-        <div className={`pane-column${chatShown ? " is-chat" : ""}`}>
+        {dshWorkspace && auth?.role !== "watch" && <BotsView workspace onClose={() => navigateDshWorkspace(false)} drafts={botDrafts} />}
+        <div hidden={dshWorkspace && auth?.role !== "watch"} className={`pane-column${chatShown ? " is-chat" : ""}`}>
         {/* over the pane only: a bar across the window would cut the sidebar off from its top row in the header */}
         <UpdateNotice updates={updates} onOpen={() => { setSettingsSection("updates"); setSettingsOpen(true); }} />
         <TelemetryNotice enabled={locked === false} onOpen={() => { setSettingsSection("updates"); setSettingsOpen(true); }} />

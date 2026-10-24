@@ -2662,3 +2662,12 @@ Conductor's local-app entry points (https://www.conductor.build/changelog) keep 
 app address and an explicit open control available. This portal reuses Ovis's own
 WebPanel framing and controls, with a larger modal for DSH's full workspace. It keeps
 DSH on its own origin and login, with Reload, new-tab and Close always outside the frame.
+
+### Native DSH workspace
+
+The native `/dsh` route follows Conductor's workspace pages beside persistent
+navigation (https://www.conductor.build/changelog). Ovis renders the roster,
+conversation and model/stop controls itself using its theme and local bridge.
+The original DSH workspace remains a secondary entry for advanced features.
+Home and Boards keep their hash overlays; selecting a terminal leaves `/dsh`.
+Drafts live in the app for this tab, and no browser DSH credentials are needed.

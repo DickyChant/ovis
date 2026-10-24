@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { BotChatCursor, BotChatPage } from "../shared/bots.ts";
+import type { BotChatCursor, BotChatPage, BotSettings } from "../shared/bots.ts";
 import { boundedJson, dshUrl } from "./bots.ts";
 import { isJsonObject, jsonResponse } from "./http.ts";
 
@@ -34,17 +34,27 @@ export class BotChatService {
     const fail = (status: number, code: string) => jsonResponse({ error: { code, message: "Bot conversation unavailable" } }, status, headers);
     const url = new URL(request.url);
     const action = url.pathname.slice("/api/bots/".length);
-    if (!["chat", "send", "events"].includes(action)) return fail(404, "not_found");
-    if (request.method !== (action === "send" ? "POST" : "GET")) return fail(405, "method_not_allowed");
-    if (action === "send" && request.headers.get("x-ovis-bot") !== "1") return fail(403, "invalid_origin");
+    if (!["chat", "send", "events", "settings", "control"].includes(action)) return fail(404, "not_found");
+    const mutation = action === "send" || action === "control";
+    if (request.method !== (mutation ? "POST" : "GET")) return fail(405, "method_not_allowed");
+    if (mutation && request.headers.get("x-ovis-bot") !== "1") return fail(403, "invalid_origin");
     if (!this.options.url || !this.options.token) return fail(503, "bridge_not_configured");
     let input: Record<string, unknown>;
     try {
-      if (action === "send") {
+      if (mutation) {
         const body = await boundedJson(new Response(request.body), 140000);
         if (!isJsonObject(body)) throw new Error("Invalid body");
-        input = { runtimeId: string(body.runtimeId), botId: string(body.botId), requestId: string(body.requestId, 80), text: string(body.text, 32000) };
-        if (!/^[a-zA-Z0-9-]{16,80}$/.test(String(input.requestId)) || !String(input.text).trim()) throw new Error("Invalid send");
+        input = { runtimeId: string(body.runtimeId), botId: string(body.botId), requestId: string(body.requestId, 80) };
+        if (!/^[a-zA-Z0-9-]{16,80}$/.test(String(input.requestId))) throw new Error("Invalid request id");
+        if (action === "send") {
+          input.text = string(body.text, 32000);
+          if (!String(input.text).trim()) throw new Error("Invalid send");
+        } else {
+          if (!["model", "stop"].includes(String(body.action))) throw new Error("Invalid control");
+          input.action = body.action;
+          if (body.action === "model") input.model = string(body.model);
+          else input.sessionId = string(body.sessionId);
+        }
       } else {
         input = { runtimeId: string(url.searchParams.get("runtimeId")), botId: string(url.searchParams.get("botId")) };
         if (action === "chat") input.cursor = chatCursor(url.searchParams.has("cursor") ? JSON.parse(url.searchParams.get("cursor")!) : null);
@@ -87,9 +97,18 @@ export class BotChatService {
       }
       const value = await boundedJson(response);
       if (action === "chat") return jsonResponse(parseBotChat(value), 200, headers);
+      if (action === "settings") return jsonResponse(parseBotSettings(value), 200, headers);
       if (!isJsonObject(value) || value.accepted !== true || value.requestId !== input.requestId) return fail(502, "invalid_acknowledgement");
       return jsonResponse({ accepted: true, requestId: input.requestId }, 200, headers);
-    } catch { return fail(503, action === "send" ? "send_unconfirmed" : "bridge_unavailable"); }
+    } catch { return fail(503, mutation ? "send_unconfirmed" : "bridge_unavailable"); }
     finally { if (!streaming) { removeRevoke?.(); abort.abort(); } }
   }
+}
+
+export function parseBotSettings(value: unknown): BotSettings {
+  if (!isJsonObject(value) || typeof value.writable !== "boolean" || typeof value.working !== "boolean" || !Array.isArray(value.models) || value.models.length > 2000) throw new Error("Invalid Bot settings");
+  return { model: value.model === null ? null : string(value.model), writable: value.writable, working: value.working, sessionId: string(value.sessionId), models: value.models.map((entry) => {
+    if (!isJsonObject(entry) || typeof entry.available !== "boolean") throw new Error("Invalid model");
+    return { ref: string(entry.ref), name: string(entry.name), provider: string(entry.provider), available: entry.available };
+  }) };
 }

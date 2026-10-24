@@ -29,8 +29,8 @@ try {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.port}`);
-  await page.getByRole("button", { name: "Bots", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Bots", exact: true });
+  await page.getByRole("link", { name: "Bots", exact: true }).click();
+  const dialog = page.getByRole("main", { name: "DSH workspace", exact: true });
   await dialog.locator(".bots-row").filter({ hasText: "Chief" }).click();
   await dialog.getByText("Connected to DSH", { exact: true }).waitFor();
   const input = dialog.getByRole("textbox", { name: "Message Chief" });
@@ -47,7 +47,23 @@ try {
   const base = `http://127.0.0.1:${server.port}`;
   const response = await fetch(`${base}/api/bots/chat?${new URLSearchParams({ runtimeId: directory.runtimeId!, botId: chief.id })}`);
   assert.equal(response.status, 200);
-  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  const settingsResponse = await fetch(`${base}/api/bots/settings?${new URLSearchParams({ runtimeId: directory.runtimeId!, botId: chief.id })}`);
+  assert.equal(settingsResponse.status, 200);
+  const settings = await settingsResponse.json() as { model: string; models: { ref: string; available: boolean }[] };
+  const nextModel = settings.models.find((entry) => entry.available && entry.ref !== settings.model);
+  assert.ok(nextModel, "mock bench offers a second model");
+  await dialog.getByRole("combobox", { name: "Bot model" }).selectOption(nextModel.ref);
+  await dialog.getByRole("button", { name: "Apply model" }).click();
+  await page.waitForResponse(async (response) => response.url().includes("/api/bots/settings") && response.ok() && (await response.json()).model === nextModel.ref);
+  await input.fill(`慢慢说 Ovis stop fixture ${crypto.randomUUID()}`);
+  await dialog.getByRole("button", { name: "Send message", exact: true }).click();
+  await dialog.locator(".is-streaming").first().waitFor({ timeout: 30000 });
+  const stop = dialog.getByRole("button", { name: "Stop reply", exact: true });
+  await stop.click({ timeout: 30000 });
+  await dialog.locator(".is-streaming").waitFor({ state: "detached", timeout: 30000 });
+  assert.equal(await page.locator("iframe").count(), 0);
+  assert.equal((await page.context().cookies(url)).filter((cookie) => cookie.name.startsWith("dsh")).length, 0, "native controls and chat need no DSH browser session");
+  await dialog.getByRole("button", { name: "Back to terminals", exact: true }).click();
   const login = readFileSync(join(home, "web.log"), "utf8").match(new RegExp(`http://127\\.0\\.0\\.1:${port}/\\?token=[^\\s]+`))?.[0];
   assert.ok(login);
   await page.context().request.get(login);
@@ -58,5 +74,5 @@ try {
   assert.equal(await portal.locator("iframe").getAttribute("src"), `${url}/`);
   await portal.getByRole("button", { name: "Close DSH" }).click();
   assert.deepEqual(errors, []);
-  console.log("PASS real DSH: authenticated history, queued send, live text deltas persisted reply and authenticated DSH iframe through Ovis");
+  console.log("PASS real DSH: native history, queued send, streaming, persisted reply, model selection and stop without a DSH browser login; original portal still works");
 } finally { await browser.close(); server.stop(); rmSync(stateDir, { recursive: true, force: true }); }

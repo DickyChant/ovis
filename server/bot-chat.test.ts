@@ -1,9 +1,26 @@
 import { expect, test } from "bun:test";
-import { BotChatService, parseBotChat } from "./bot-chat.ts";
+import { BotChatService, parseBotChat, parseBotSettings } from "./bot-chat.ts";
 
 const target = "runtimeId=r&botId=b";
 const page = { sessionId: "s", sendState: "ready", cursor: { part: 0 }, items: [{ id: "m", kind: "bot", text: "Hello", private: "SECRET" }], private: "SECRET" };
 const request = (action: string, body?: unknown) => new Request(`http://localhost/api/bots/${action}?${target}`, body === undefined ? {} : { method: "POST", headers: { "x-ovis-bot": "1" }, body: JSON.stringify(body) });
+
+test("native controls expose only model metadata and forward a bounded explicit action", async () => {
+  const settings = { model: null, writable: true, working: false, sessionId: "s", models: [{ ref: "mock/one", name: "One", provider: "Mock", available: true, secret: "SECRET" }] };
+  expect(JSON.stringify(parseBotSettings(settings))).not.toContain("SECRET");
+  let calls = 0;
+  const service = new BotChatService({ url: "http://127.0.0.1:3096", token: "fixture", fetch: async (url, init) => {
+    calls++;
+    if (url.pathname.endsWith("settings")) return Response.json(settings);
+    const input = JSON.parse(String(init.body));
+    expect(input).toEqual({ runtimeId: "r", botId: "b", requestId: "control-id-000001", action: "model", model: "mock/one" });
+    return Response.json({ accepted: true, requestId: input.requestId });
+  } });
+  expect((await service.handle(request("settings"))).status).toBe(200);
+  expect((await service.handle(request("control", { runtimeId: "r", botId: "b", requestId: "control-id-000001", action: "model", model: "mock/one", secret: "NEVER" }))).status).toBe(200);
+  expect((await service.handle(request("control", { action: "delete" }))).status).toBe(400);
+  expect(calls).toBe(2);
+});
 
 test("chat validates and whitelists history, and only server credentials reach fixed DSH origin", async () => {
   expect(JSON.stringify(parseBotChat(page))).not.toContain("SECRET");

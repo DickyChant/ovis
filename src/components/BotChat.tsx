@@ -4,8 +4,8 @@ import { apiFetch } from "../lib/api-request-id.ts";
 import { useT } from "../lib/i18n.ts";
 import type { BotDrafts } from "../lib/botDrafts.ts";
 
-export function BotChat({ runtimeId, botId, name, online, drafts }: {
-  runtimeId: string; botId: string; name: string; online: boolean; drafts: BotDrafts;
+export function BotChat({ runtimeId, botId, name, online, drafts, onActivity }: {
+  runtimeId: string; botId: string; name: string; online: boolean; drafts: BotDrafts; onActivity?(): void;
 }) {
   const t = useT();
   const identity = `${runtimeId}:${botId}`;
@@ -18,6 +18,7 @@ export function BotChat({ runtimeId, botId, name, online, drafts }: {
   const [failed, setFailed] = useState(false);
   const [streams, setStreams] = useState<Record<string, string>>({});
   const refreshRef = useRef<() => void>(() => {});
+  const activityRef = useRef(onActivity); activityRef.current = onActivity;
   const history = useRef<HTMLDivElement>(null);
   const follow = useRef(true);
   const query = new URLSearchParams({ runtimeId, botId }).toString();
@@ -47,6 +48,7 @@ export function BotChat({ runtimeId, botId, name, online, drafts }: {
         const data = JSON.parse((event as MessageEvent).data) as { attemptId?: string; phase?: string; text?: string };
         if (typeof data.attemptId !== "string" || data.attemptId.length > 256) return;
         const id = data.attemptId;
+        if (data.phase === "start" || data.phase === "end") activityRef.current?.();
         setStreams((current) => {
           if (data.phase === "end") { const next = { ...current }; delete next[id]; return next; }
           if (Object.keys(current).length > 32) return current;
@@ -99,7 +101,7 @@ export function BotChat({ runtimeId, botId, name, online, drafts }: {
   return <section className="bot-chat" aria-label={t("Chat with {name}", { name })}>
     <h4>{t("Direct chat")}</h4>
     <p className="bot-chat-state" role="status">{connected && !failed ? t("Connected to DSH") : t("Chat disconnected. Your draft stays here.")}</p>
-    {page?.sendState === "setup_required" && <p role="status">{t("Choose a model for this Bot in DSH before sending messages.")}</p>}
+    {page?.sendState === "setup_required" && <p role="status">{t("Choose a model above before sending messages.")}</p>}
     {page?.sendState === "read_only" && <p role="status">{t("This team is read only here. Send from its active DSH host.")}</p>}
     <div className="bot-chat-history" ref={history} tabIndex={0} aria-label={t("Conversation history")} onScroll={() => {
       const node = history.current; if (node) follow.current = node.scrollHeight - node.scrollTop - node.clientHeight < 80;
