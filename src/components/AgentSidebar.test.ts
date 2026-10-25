@@ -73,7 +73,7 @@ describe("AgentSidebar plugin tokens", () => {
       pane("w1:p2", { tokens: { quota: "unknown", progress: "90% 1m" } }),
       pane("w1:p3", { agent: "codex", tokens: { quota: "5h 95%", summary: "codex's own rows" } }),
     ])]);
-    expect(texts(html, "agent-tokens")).toEqual(["40% 12m · 5h 95%", "90% 1m", "codex's own rows"]);
+    expect(texts(html, "agent-tokens")).toEqual(["Progress: 40% · Est. 12m left · 5h 95%", "Progress: 90% · Est. 1m left", "codex's own rows"]);
   });
 
   test("the row's tooltip says each token whole; a PC that is away draws none", () => {
@@ -95,4 +95,19 @@ describe("AgentSidebar plugin tokens", () => {
     // the mark already draws Claude: the line does not say it again
     expect(lines[1]).toBe("checkout-api");
   });
+  test("worker and reviewer stay distinct with the same title and named roster entries", () => {
+    const m = machine([
+      pane("w1:p1", { title: "PRJ-4 Improve search", display_agent: "agent · under review", tokens: { progress: "5% 81m" } }),
+      pane("w1:p2", { title: "PRJ-4 Improve search", display_agent: "reviewer · under review", tokens: { progress: "waiting" } }),
+    ]);
+    m.snapshot!.agents = m.snapshot!.agents.map((agent, index) => ({ ...agent, name: `worker-${index}`, display_agent: undefined }));
+    const html = render([m]);
+    expect(texts(html, "agent-role")).toEqual(["Worker", "Reviewer"]);
+    expect(html).toContain("under review");
+    expect(texts(html, "agent-title")).toEqual(["PRJ-4 Improve search", "PRJ-4 Improve search"]);
+    expect(texts(html, "agent-tokens")).toEqual(["Progress: 5% · Est. 81m left", "Progress: waiting"]);
+    expect(html).toContain('data-pin-key="local:w1:p1"');
+    expect(html).toContain('data-pin-key="local:w1:p2"');
+  });
+
 });

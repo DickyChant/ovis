@@ -2680,3 +2680,14 @@ workspace gains a conversation selector, composer attachments, and pending appro
 above history. Speaker names distinguish group replies. Ovis's own theme and controls
 are used; no external code or assets are copied. Direct-only controls disappear when
 a group is selected. No browser DSH login or iframe is needed for these actions.
+
+### Worker and reviewer sidebar metadata (2026-10-25)
+
+Following Zed's Threads Sidebar (https://zed.dev/docs/ai/parallel-agents), task titles
+remain separate from who is running and current status. Herdr's pane display metadata
+takes precedence over a roster nickname, so a worker and reviewer with the same title
+remain distinguishable. Progress is labelled; the Projects percentage/time format
+labels its time as an estimate remaining. Other plugin text is kept verbatim. Each
+pane retains its own selection and deep link; no rows are merged by title.
+
+The role has a non-shrinking label beside the task title, so long titles in compact rows cannot hide Worker or Reviewer. The context line retains the review status and location.

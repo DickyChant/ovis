@@ -69,22 +69,27 @@ export function paneTokenRuleMatches(rule: PaneTokenRule, value: string): boolea
  * is said once, at the first place whose rules leave it shown. The values are text the row writes as
  * it is, never markup.
  */
-export function paneTokenValues(layout: AgentRowTokens | null, agent: string | null, tokens: Readonly<Record<string, unknown>> | null | undefined): string[] {
+export function paneTokenEntries(layout: AgentRowTokens | null, agent: string | null, tokens: Readonly<Record<string, unknown>> | null | undefined): Array<{ name: string; value: string }> {
   if (!tokens) return [];
   const valueOf = (name: string): string | null => {
     const value = Object.hasOwn(tokens, name) ? tokens[name] : undefined;
     return typeof value === "string" && value.trim() ? value : null;
   };
   const specs = (layout && agent !== null && Object.hasOwn(layout.by_agent, agent) ? layout.by_agent[agent] : undefined) ?? layout?.rows ?? null;
-  if (specs === null) return Object.keys(tokens).sort().flatMap((name) => valueOf(name)?.trim() ?? []);
-  const shown: string[] = [];
+  if (specs === null) return Object.keys(tokens).sort().flatMap((name) => { const value = valueOf(name)?.trim(); return value ? [{ name, value }] : []; });
+  const shown: Array<{ name: string; value: string }> = [];
   const said = new Set<string>();
   for (const { name, rules } of specs) {
     if (said.has(name)) continue;
     const value = valueOf(name);
     if (value === null || rules?.find((rule) => paneTokenRuleMatches(rule, value))?.hide) continue;
     said.add(name);
-    shown.push(value.trim());
+    shown.push({ name, value: value.trim() });
   }
   return shown;
+}
+
+/** Values for callers that do not draw token labels; selection and hiding match named entries. */
+export function paneTokenValues(layout: AgentRowTokens | null, agent: string | null, tokens: Readonly<Record<string, unknown>> | null | undefined): string[] {
+  return paneTokenEntries(layout, agent, tokens).map(({ value }) => value);
 }

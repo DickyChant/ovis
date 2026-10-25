@@ -4,6 +4,10 @@
  * Register and fixed terms follow ../i18n.ko.ts; a key another feature also uses goes there.
  */
 export const SIDEBAR_KO: Record<string, string> = {
+  "Worker": "작업 담당",
+  "Reviewer": "검토 담당",
+  "Progress: {value}": "진행: {value}",
+  "Progress: {percent} · Est. {time} left": "진행: {percent} · 예상 남은 시간 {time}",
   "Pin agent": "에이전트 고정",
   "Unpin agent": "에이전트 고정 해제",
   "Pin workspace": "워크스페이스 고정",

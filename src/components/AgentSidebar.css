@@ -269,3 +269,6 @@
   .agent-row:enabled:active { opacity: 1; }
   .agent-item:has(> .agent-row:enabled:active) { background: var(--side-hover); }
 }
+
+/* Keep the task role visible even when a long title uses the compact row. */
+.agent-role { flex: none; color: var(--text-dim); font-size: var(--fs-xs); border: 1px solid var(--border); border-radius: var(--radius-sm); padding-inline: var(--space-1); }

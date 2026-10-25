@@ -48,8 +48,8 @@ export function sidebarAgents(snapshot: SessionSnapshot | null): SidebarAgent[] 
         tab: tab?.workspace_id === pane.workspace_id ? tab : null,
         agent,
         canonicalAgent,
-        agentLabel: nonblank(agent?.display_agent) ?? nonblank(agent?.name)
-          ?? nonblank(pane.display_agent) ?? canonicalAgent ?? nonblank(agent?.title),
+        agentLabel: nonblank(pane.display_agent) ?? nonblank(agent?.display_agent)
+          ?? nonblank(agent?.name) ?? canonicalAgent ?? nonblank(agent?.title),
       },
     });
   });

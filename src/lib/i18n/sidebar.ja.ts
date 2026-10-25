@@ -4,6 +4,10 @@
  * Register and fixed terms follow ../i18n.ja.ts; a key another feature also uses goes there.
  */
 export const SIDEBAR_JA: Record<string, string> = {
+  "Worker": "作業担当",
+  "Reviewer": "レビュー担当",
+  "Progress: {value}": "進捗: {value}",
+  "Progress: {percent} · Est. {time} left": "進捗: {percent} · 残り約 {time}",
   "Pin agent": "エージェントを固定",
   "Unpin agent": "エージェントの固定を解除",
   "Pin workspace": "ワークスペースを固定",

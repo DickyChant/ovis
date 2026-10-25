@@ -4,6 +4,10 @@
  * Register and fixed terms follow ../i18n.zh.ts; a key another feature also uses goes there.
  */
 export const SIDEBAR_ZH: Record<string, string> = {
+  "Worker": "执行者",
+  "Reviewer": "审查者",
+  "Progress: {value}": "进度：{value}",
+  "Progress: {percent} · Est. {time} left": "进度：{percent} · 预计剩余 {time}",
   "Pin agent": "固定 Agent",
   "Unpin agent": "取消固定 Agent",
   "Pin workspace": "固定工作区",
