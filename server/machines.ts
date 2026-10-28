@@ -82,10 +82,12 @@ interface JobState {
   pending?: { resolve(value: string): void; reject(error: Error): void };
   ssh?: SshConnection;
   timer: ReturnType<typeof setTimeout>;
-  /** the registered PC a bridge update is for, which shows it as `updating` */
+  /** the registered PC the job is for: a bridge update, or a connect once it installs, shows it as `updating` */
   runtime?: Runtime;
   /** the PC's own Ovis updates itself in this job, asked by it (MachineManager.runOwnUpdate) */
   own?: boolean;
+  /** reached the installing stage: a connect's install shows on its PC like an update */
+  installing?: boolean;
   stageStartedAt: number;
   finished: Promise<void>;
 }
@@ -549,6 +551,8 @@ export class MachineManager {
     if (text !== this.written || !holdsDocument(this.statePath, text)) { writePrivateState(this.statePath, data); this.written = text; }
   }
   job(id: string): SetupJob | undefined { return this.jobs.get(id)?.public; }
+  /** the jobs still running, each holding one of the setup slots */
+  activeJobs(): SetupJob[] { return [...this.jobs.values()].map((j) => j.public).filter((j) => !["connected", "failed", "cancelled"].includes(j.phase)); }
   settings(): MachineSettings { return { ...this.preferences, ...(this.setAside.length > 0 ? { set_aside: [...this.setAside] } : {}) }; }
   updateSettings(patch: Record<string, unknown>): MachineSettings {
     if (patch["auto_update_bridges"] !== undefined) {
@@ -586,7 +590,7 @@ export class MachineManager {
     if (name !== undefined && (typeof name !== "string" || name.length > 100)) throw new Error("PC name must be at most 100 characters");
     const waiting = existing && [...this.jobs.values()].find((j) => j.public.machine_id === existing.machine.id && j.public.phase === "starting" && (j.public.action_required === "windows_login" || j.public.action_required === "windows_start_failed"));
     if (waiting && !request.update_remote && sameSshSession(target, waiting.public.target) && target.identity_file === waiting.public.target.identity_file) return waiting.public;
-    if ([...this.jobs.values()].filter((j) => !["connected", "failed", "cancelled"].includes(j.public.phase)).length >= 4) throw new Error("Finish or cancel the current connection jobs first");
+    if (this.activeJobs().length >= 5) throw new Error("Finish or cancel the current connection jobs first");
     if (request.machine_id && !existing) throw new Error("PC not found");
     if (existing && [...this.jobs.values()].some((j) => j.public.machine_id === existing.machine.id && !["connected", "failed", "cancelled"].includes(j.public.phase))) throw new Error("A connection job for this PC is already running");
     const id = randomUUID();
@@ -601,8 +605,8 @@ export class MachineManager {
     // review in this dialog, and a reconnect or an update that asks nobody goes only where the PC is (#2075)
     const moving = !!existing && !sameSshSession(target, existing.machine.target!);
     const resumeRetry = existing?.machine.state === "reconnecting";
-    const job: JobState = { update: request.update_remote === true, auto, public: { id, machine_id: machineId, target, phase: "connecting", step: "Connecting with SSH keys and ssh-agent…", challenge: null, installations: [], error: null, ssh_output: null, progress: null }, abort: new AbortController(), timer: setTimeout(() => this.cancelJob(id, true), 600_000), stageStartedAt: Date.now(), finished: Promise.resolve() };
-    if (job.update && existing) job.runtime = existing;
+    const job: JobState = { update: request.update_remote === true, auto, public: { id, machine_id: machineId, target, started_at: Date.now(), phase: "connecting", step: "Connecting with SSH keys and ssh-agent…", challenge: null, installations: [], error: null, ssh_output: null, progress: null }, abort: new AbortController(), timer: setTimeout(() => this.cancelJob(id, true), 600_000), stageStartedAt: Date.now(), finished: Promise.resolve() };
+    if (existing) job.runtime = existing;
     if (job.update && existing && !auto) existing.updateCancelled = false;
     job.timer.unref();
     this.jobs.set(id, job);
@@ -721,7 +725,7 @@ export class MachineManager {
     if (job.abort.signal.aborted) throw new Error("Setup cancelled");
     job.public.phase = phase; job.public.step = step; job.public.challenge = null; job.public.ssh_output = null;
     // approved: from here on the install's own timeouts apply, not the setup's 10 minutes
-    if (phase === "installing") clearTimeout(job.timer);
+    if (phase === "installing") { clearTimeout(job.timer); job.installing = true; }
     // byte progress belongs to the stage that reported it: a step without its own bytes (the SSH
     // key registration after a bundle install, a first bridge start) shows its own text instead
     job.public.progress = null;
@@ -737,7 +741,7 @@ export class MachineManager {
   }
   /** Mirror a bridge update onto its PC, so the sidebar and header show it without the dialog. */
   private showUpdate(job: JobState): void {
-    if (!job.runtime) return;
+    if (!job.runtime || !job.update && !job.installing) return;
     job.runtime.machine.updating = { job_id: job.public.id, step: job.public.step, progress: job.public.progress ?? null, ...(job.own ? { ovis: true } : {}) };
     // progress arrives per chunk: a few events a second are plenty
     if (!this.emitTimer) { this.emitTimer = setTimeout(() => { this.emitTimer = undefined; this.emit(); }, 250); this.emitTimer.unref(); }

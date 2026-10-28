@@ -128,6 +128,8 @@ export interface SetupJob {
    */
   ssh_output: string | null;
   target: SshTarget;
+  /** when the job started, in ms since the epoch */
+  started_at: number;
   progress?: SetupProgress | null;
   /** the PC's own Ovis, when it is older than this app (Machine.remote_ovis): a first connect has no PC to carry it */
   remote_ovis?: RemoteOvis | null;
@@ -147,6 +149,8 @@ export interface DevicePairedEvent {
   label: string;
   enrolled_at: string;
 }
+/** GET /api/machines/setup: the jobs still running (at most five run at once) */
+export interface SetupJobList { jobs: SetupJob[] }
 /** `preferences`: what every browser of this server shares changed (shared/preferences.ts) */
 export type MachineEvent = { type: "machines"; machines: Machine[] } | { type: "machine-message"; machine_id: string; message: ServerMessage }
   | { type: "preferences"; preferences: SharedPreferences }

@@ -1,4 +1,4 @@
-import type { DevicePairedEvent, Machine, MachineEvent, MachineRoster, SetupAction, SetupRequest } from "../shared/machines.ts";
+import type { DevicePairedEvent, Machine, MachineEvent, MachineRoster, SetupAction, SetupJobList, SetupRequest } from "../shared/machines.ts";
 import type { AgentRowTokens } from "../shared/pane-tokens.ts";
 import type { SharedPreferences } from "../shared/preferences.ts";
 import type { PanePromptResponse, SessionSnapshot } from "../shared/protocol.ts";
@@ -270,6 +270,7 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
       return new Response(stream, { headers: { "content-type": "text/event-stream", "cache-control": "no-store", "x-accel-buffering": "no" } });
     }
     if (parts[0] === "setup") {
+      if (parts.length === 1 && request.method === "GET") { setRequestRoute("/api/machines/setup"); return jsonResponse({ jobs: manager.activeJobs() } satisfies SetupJobList); }
       if (parts.length === 1 && request.method === "POST") { setRequestRoute("/api/machines/setup"); return jsonResponse(manager.setup(await request.json() as SetupRequest), 202); }
       if (parts.length === 2) {
         setRequestRoute("/api/machines/setup/:job_id");

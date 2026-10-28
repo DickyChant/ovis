@@ -3,7 +3,7 @@ import { chmodSync, existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, 
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { describeProgress } from "../src/lib/bridgeProgress.ts";
-import type { SetupJob } from "../shared/machines.ts";
+import type { Machine, SetupJob } from "../shared/machines.ts";
 import type { PanePromptResponse } from "../shared/protocol.ts";
 import { paneNotificationTag } from "../shared/notify-policy.ts";
 import { BRIDGE_PROTOCOL, machinePath, paneStorageId, REMOTE_BUNDLE_VERSION } from "../shared/machines.ts";
@@ -376,7 +376,7 @@ describe("setup job labels", () => {
     const manager = new MachineManager(dir, {} as PushService, {} as CompletionTracker);
     managers.push(manager);
     const job: TestJob = {
-      public: { id: "job", machine_id: "machine", target: { destination: "pc" }, phase, step, challenge, installations: [], error: null, ssh_output: null, progress: null },
+      public: { id: "job", machine_id: "machine", target: { destination: "pc" }, started_at: 0, phase, step, challenge, installations: [], error: null, ssh_output: null, progress: null },
       abort: new AbortController(), timer: setTimeout(() => {}, 0), stageStartedAt: Date.now(), update: false, auto: false, finished: Promise.resolve(),
     };
     clearTimeout(job.timer);
@@ -723,6 +723,24 @@ describe("setup job labels", () => {
     drive.stage(job, "installing", "Registering the app SSH key…");
     expect(manager.job("job")?.progress).toBeNull();
     expect(describeProgress(manager.job("job")?.progress)).toBeNull();
+  });
+
+  it("shows a connect's install on its PC, and not the connect before it", () => {
+    const { drive, job } = fixture("connecting", "Connecting with SSH keys and ssh-agent…");
+    const machine: Partial<Machine> = { updating: null };
+    (job as TestJob & { runtime: unknown }).runtime = { machine };
+    drive.stage(job, "checking", "Checking the remote environment…");
+    expect(machine.updating).toBeNull();
+    drive.stage(job, "installing", "Installing verified linux-x64 bundle…");
+    drive.progress(job, "upload", 10, 100);
+    expect(machine.updating).toMatchObject({ job_id: "job", step: "Installing verified linux-x64 bundle…", progress: { stage: "upload", done: 10, total: 100 } });
+  });
+
+  it("lists only the jobs still running", () => {
+    const { manager } = fixture("installing", "Installing verified linux-x64 bundle…");
+    expect(manager.activeJobs().map((j) => j.id)).toEqual(["job"]);
+    manager.action("job", { action: "cancel" });
+    expect(manager.activeJobs()).toEqual([]);
   });
 });
 
@@ -1437,7 +1455,7 @@ describe("a Windows startup retried after a scheduler failure", () => {
     const manager = new MachineManager(dir, {} as never, {} as never, async () => { throw new Error("fixture local offline"); });
     const runtime = manager["runtime"]({ id: "windows", name: "pc", kind: "ssh", enabled: true, state: "error", action_required: "windows_start_failed", target: { destination: "pc" }, snapshot: null, error: "Task registration denied" });
     manager["machines"].set("windows", runtime);
-    const job = { public: { id: "review", machine_id: "windows", target: { destination: "pc" }, phase: "starting", step: "Starting", challenge: null, installations: [], error: null, ssh_output: null } as SetupJob, abort: new AbortController(), timer: setTimeout(() => {}, 600_000), update: false, auto: false, stageStartedAt: Date.now(), finished: Promise.resolve() };
+    const job = { public: { id: "review", machine_id: "windows", target: { destination: "pc" }, started_at: 0, phase: "starting", step: "Starting", challenge: null, installations: [], error: null, ssh_output: null } as SetupJob, abort: new AbortController(), timer: setTimeout(() => {}, 600_000), update: false, auto: false, stageStartedAt: Date.now(), finished: Promise.resolve() };
     job.timer.unref();
     manager["jobs"].set(job.public.id, job);
     manager["wait"] = async () => "approved";
