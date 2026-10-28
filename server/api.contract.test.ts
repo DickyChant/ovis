@@ -1404,11 +1404,11 @@ describe("agent rename", () => {
       app = createServer({ port: 0, hostname: "127.0.0.1", token: "", stateDir: state, tailscaleOwner: null });
       const url = `http://127.0.0.1:${app.port}/api/machines/settings`;
       const settings = await (await fetch(url)).json() as MachineSettings;
-      expect(settings).toEqual({ auto_update_bridges: true, set_aside: [expect.stringMatching(/^machines\.json\.corrupt-\S+$/)] });
+      expect(settings).toEqual({ auto_update_bridges: true, paused_all: false, paused_machines: [], set_aside: [expect.stringMatching(/^machines\.json\.corrupt-\S+$/)] });
       expect(readdirSync(state)).toContain(settings.set_aside![0]!);
       const patched = await fetch(url, { method: "PATCH", headers: { "content-type": "application/json", "x-herdr-machine": "1" }, body: JSON.stringify({ auto_update_bridges: false, set_aside: [] }) });
       expect(patched.status).toBe(200);
-      expect(await patched.json()).toEqual({ auto_update_bridges: false, set_aside: settings.set_aside });
+      expect(await patched.json()).toEqual({ auto_update_bridges: false, paused_all: false, paused_machines: [], set_aside: settings.set_aside });
     } finally {
       app?.stop(); error.mockRestore();
       rmSync(state, { recursive: true, force: true });

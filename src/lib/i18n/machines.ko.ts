@@ -119,4 +119,10 @@ export const MACHINES_KO: Record<string, string> = {
   "Update this PC's Ovis and connect": "이 PC의 Ovis를 업데이트하고 연결",
   "Updating {name}'s own Ovis": "{name}의 Ovis 업데이트 중",
   "That PC's own updater installs it there. Existing herdr sessions keep running.": "그 PC의 자체 업데이터가 그곳에 설치합니다. 기존 herdr 세션은 계속 돕니다.",
+  "Stop connecting": "연결 중지",
+  "Resume connecting": "연결 재개",
+  "Resume all": "모두 재개",
+  "Connecting stopped": "연결 중지됨",
+  "Connecting stopped for every PC": "모든 PC 연결 중지됨",
+  "Connecting stopped for {n} of {total} PCs": "PC {total}대 중 {n}대 연결 중지됨",
 };

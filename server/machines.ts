@@ -4,7 +4,7 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync
 import { createServer as tcpServer } from "node:net";
 import { hostname } from "node:os";
 import { basename, join } from "node:path";
-import { BRIDGE_PROTOCOL, LOCAL_MACHINE, OWN_UPDATE_OFFER, REMOTE_BUNDLE_VERSION, type BridgeIdentity, type RemoteOvis, type Machine, type MachineAction, type MachineEvent, type MachineSettings, type SetupAction, type SetupJob, type SetupProgress, type SetupRequest, type SshTarget } from "../shared/machines.ts";
+import { BRIDGE_PROTOCOL, LOCAL_MACHINE, OWN_UPDATE_OFFER, REMOTE_BUNDLE_VERSION, STOPPED_CONNECTING, type BridgeIdentity, type RemoteOvis, type Machine, type MachineAction, type MachineEvent, type MachineSettings, type SetupAction, type SetupJob, type SetupProgress, type SetupRequest, type SshTarget } from "../shared/machines.ts";
 import type { ServerMessage, SessionSnapshot, HerdrPane } from "../shared/protocol.ts";
 import type { PushService } from "./push.ts";
 import { alertStatus } from "../shared/notify-policy.ts";
@@ -89,7 +89,9 @@ interface JobState {
   stageStartedAt: number;
   finished: Promise<void>;
 }
-const DEFAULT_SETTINGS: MachineSettings = { auto_update_bridges: true };
+const DEFAULT_SETTINGS: MachineSettings = { auto_update_bridges: true, paused_all: false, paused_machines: [] };
+/** the most PCs paused_machines may name */
+const MAX_PAUSED = 200;
 /** the shortest time between the starts of two health calls that prove one PC's server (sourceCheck) */
 export const SOURCE_CHECK_INTERVAL_MS = 1000;
 /** the shortest time between the starts of two tries to connect that a request cuts short (retryNow) */
@@ -307,6 +309,9 @@ export class MachineManager {
     try {
       const saved: unknown = JSON.parse(readFileSync(this.settingsPath, "utf8"));
       if (saved && typeof saved === "object" && typeof (saved as MachineSettings).auto_update_bridges === "boolean") this.preferences.auto_update_bridges = (saved as MachineSettings).auto_update_bridges;
+      if (saved && typeof saved === "object" && typeof (saved as MachineSettings).paused_all === "boolean") this.preferences.paused_all = (saved as MachineSettings).paused_all;
+      const paused = saved && typeof saved === "object" ? (saved as MachineSettings).paused_machines : undefined;
+      if (Array.isArray(paused) && paused.every((id) => typeof id === "string")) this.preferences.paused_machines = paused.slice(0, MAX_PAUSED);
     } catch (error) {
       const cause = error instanceof SyntaxError ? "not valid JSON"
         : error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : "read failed";
@@ -438,7 +443,9 @@ export class MachineManager {
       if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
     }
   }
-  private runtime(machine: Machine): Runtime { return { machine, attempts: 0, generation: 0, refreshing: false, refreshQueued: false, snapshotRevision: 0, terminals: new Set(), finishes: new FinishEpochLedger(machine.snapshot) }; }
+  private stoppedFor(id: string): boolean { return id !== LOCAL_MACHINE && (this.preferences.paused_all || this.preferences.paused_machines.includes(id)); }
+  private markPaused(machine: Machine): void { if (this.stoppedFor(machine.id)) machine.paused = true; else delete machine.paused; }
+  private runtime(machine: Machine): Runtime { this.markPaused(machine); return { machine, attempts: 0, generation: 0, refreshing: false, refreshQueued: false, snapshotRevision: 0, terminals: new Set(), finishes: new FinishEpochLedger(machine.snapshot) }; }
   list(): Machine[] { return [this.local, ...[...this.machines.values()].map((r) => r.machine)]; }
   /**
    * Whether this server knows a PC's herdr run (finish epoch) has ended (server/seen.ts). This server's own PC is in
@@ -551,10 +558,14 @@ export class MachineManager {
   job(id: string): SetupJob | undefined { return this.jobs.get(id)?.public; }
   settings(): MachineSettings { return { ...this.preferences, ...(this.setAside.length > 0 ? { set_aside: [...this.setAside] } : {}) }; }
   updateSettings(patch: Record<string, unknown>): MachineSettings {
-    if (patch["auto_update_bridges"] !== undefined) {
-      if (typeof patch["auto_update_bridges"] !== "boolean") throw new Error("auto_update_bridges must be boolean");
-      this.preferences.auto_update_bridges = patch["auto_update_bridges"];
-    }
+    if (patch["auto_update_bridges"] !== undefined && typeof patch["auto_update_bridges"] !== "boolean") throw new Error("auto_update_bridges must be boolean");
+    if (patch["paused_all"] !== undefined && typeof patch["paused_all"] !== "boolean") throw new Error("paused_all must be boolean");
+    const paused = patch["paused_machines"];
+    if (paused !== undefined && (!Array.isArray(paused) || paused.length > MAX_PAUSED || !paused.every((id) => typeof id === "string" && id.length > 0 && id.length <= 100))) throw new Error(`paused_machines must be a list of at most ${MAX_PAUSED} PC ids`);
+    if (patch["auto_update_bridges"] !== undefined) this.preferences.auto_update_bridges = patch["auto_update_bridges"] as boolean;
+    if (patch["paused_all"] !== undefined) this.preferences.paused_all = patch["paused_all"] as boolean;
+    if (paused !== undefined) this.preferences.paused_machines = [...new Set(paused as string[])];
+    if (patch["paused_all"] !== undefined || paused !== undefined) this.applyPause();
     mkdirSync(this.stateDir, { recursive: true, mode: 0o700 });
     const tmp = this.settingsPath + ".tmp";
     writeFileSync(tmp, JSON.stringify(this.preferences), { mode: 0o600 });
@@ -579,6 +590,7 @@ export class MachineManager {
   }
   setup(request: SetupRequest, options: { auto?: boolean } = {}): SetupJob {
     if (this.stopped) throw new Error("Server stopping");
+    if (request.machine_id ? this.stoppedFor(request.machine_id) : this.preferences.paused_all) throw new Error(STOPPED_CONNECTING);
     let target = validateTarget(request);
     const existing = request.machine_id ? this.machines.get(request.machine_id) : undefined;
     // a PC saved in herdr is named by its catalog (any length); a name sent with it is not read
@@ -1300,6 +1312,7 @@ export class MachineManager {
   }
   /** a disconnected PC tries again on its own, waiting longer after each failed try */
   private retryLater(runtime: Runtime): void {
+    if (this.stoppedFor(runtime.machine.id)) { runtime.machine.state = "disconnected"; this.emit(); return; }
     runtime.machine.state = "reconnecting";
     const delay = Math.min(60_000, 1000 * 2 ** Math.min(runtime.attempts++, 6));
     runtime.retry = setTimeout(() => { runtime.retry = undefined; void this.reconnect(runtime); }, delay); runtime.retry.unref();
@@ -1320,8 +1333,38 @@ export class MachineManager {
     clearTimeout(runtime.retry); runtime.retry = undefined;
     void this.reconnect(runtime);
   }
+  /**
+   * Stop connecting to one PC (or take that back). Taking it back while every PC is stopped stops all the
+   * others by name instead, so only this one connects again.
+   */
+  setPaused(id: string, paused: boolean): MachineSettings {
+    if (!this.machines.has(id)) throw new Error("PC not found");
+    let names = this.preferences.paused_machines.filter((name) => name !== id);
+    let all = this.preferences.paused_all;
+    if (!paused && all) { all = false; names = [...this.machines.keys()].filter((name) => name !== id); }
+    if (paused) names.push(id);
+    return this.updateSettings({ paused_all: all, paused_machines: names.slice(-MAX_PAUSED) });
+  }
+  /** a PC newly stopped lets go of its connection and its setups; one newly let go connects again */
+  private applyPause(): void {
+    for (const [id, job] of this.jobs) {
+      const runtime = this.machines.get(job.public.machine_id);
+      // a first setup's PC is not registered yet: only stopping every PC stops it
+      if (runtime ? this.stoppedFor(runtime.machine.id) : this.preferences.paused_all) this.cancelJob(id);
+    }
+    for (const runtime of this.machines.values()) {
+      const was = runtime.machine.paused === true;
+      this.markPaused(runtime.machine);
+      if (runtime.machine.paused && !was) {
+        this.disconnect(runtime);
+        runtime.attempts = 0; runtime.machine.error = null;
+        if (runtime.machine.action_required !== "connect") runtime.machine.action_required = null;
+      } else if (!runtime.machine.paused && was && runtime.machine.enabled) void this.reconnect(runtime);
+    }
+    this.emit();
+  }
   private async reconnect(runtime: Runtime): Promise<void> {
-    if (!this.mayConnect(runtime)) return;
+    if (!this.mayConnect(runtime) || this.stoppedFor(runtime.machine.id)) return;
     if (this.stopped || !runtime.machine.enabled) return;
     this.disconnect(runtime);
     runtime.triedAt = this.now();
@@ -1341,7 +1384,7 @@ export class MachineManager {
       const runtime = this.machines.get(id);
       // still wanted: the PC may have been updated by hand, removed, disabled or its update
       // cancelled meanwhile
-      if (this.stopped || !runtime?.machine.enabled || runtime.machine.action_required !== "update_bridge" || runtime.updateCancelled || !this.mayManageBridge(runtime) || !this.preferences.auto_update_bridges) return;
+      if (this.stopped || !runtime?.machine.enabled || runtime.machine.paused || runtime.machine.action_required !== "update_bridge" || runtime.updateCancelled || !this.mayManageBridge(runtime) || !this.preferences.auto_update_bridges) return;
       if ([...this.jobs.values()].some((j) => j.public.machine_id === id && !["connected", "failed", "cancelled"].includes(j.public.phase))) return;
       const job = this.updateBridge(id, true);
       await this.jobs.get(job.id)?.finished;

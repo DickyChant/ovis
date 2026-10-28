@@ -119,4 +119,10 @@ export const MACHINES_JA: Record<string, string> = {
   "Update this PC's Ovis and connect": "この PC の Ovis を更新して接続",
   "Updating {name}'s own Ovis": "{name} の Ovis を更新しています",
   "That PC's own updater installs it there. Existing herdr sessions keep running.": "その PC 自身のアップデーターがそこにインストールします。既存の herdr セッションは動き続けます。",
+  "Stop connecting": "接続を停止",
+  "Resume connecting": "接続を再開",
+  "Resume all": "すべて再開",
+  "Connecting stopped": "接続を停止中",
+  "Connecting stopped for every PC": "すべての PC への接続を停止中",
+  "Connecting stopped for {n} of {total} PCs": "{total} 台中 {n} 台の PC への接続を停止中",
 };

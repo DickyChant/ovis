@@ -119,4 +119,10 @@ export const MACHINES_ZH: Record<string, string> = {
   "Update this PC's Ovis and connect": "更新此 PC 的 Ovis 并连接",
   "Updating {name}'s own Ovis": "正在更新 {name} 的 Ovis",
   "That PC's own updater installs it there. Existing herdr sessions keep running.": "由那台 PC 自己的更新程序在那里安装。现有的 herdr 会话继续运行。",
+  "Stop connecting": "停止连接",
+  "Resume connecting": "恢复连接",
+  "Resume all": "全部恢复",
+  "Connecting stopped": "已停止连接",
+  "Connecting stopped for every PC": "已停止连接所有 PC",
+  "Connecting stopped for {n} of {total} PCs": "已停止连接 {n}/{total} 台 PC",
 };

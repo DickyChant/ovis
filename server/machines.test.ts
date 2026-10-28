@@ -1381,7 +1381,7 @@ describe("saved PCs that cannot be read", () => {
       expect(readFileSync(join(dir, aside[0]!))).toEqual(zeros);
       expect(existsSync(join(dir, "machines.json"))).toBe(false);
       expect(manager.list().map((machine) => machine.kind)).toEqual(["local"]);
-      expect(manager.settings()).toEqual({ auto_update_bridges: true, set_aside: aside });
+      expect(manager.settings()).toEqual({ auto_update_bridges: true, paused_all: false, paused_machines: [], set_aside: aside });
       expect(String(error.mock.calls[0]?.[0])).toContain(aside[0]!);
       // the next save makes a readable file again
       (manager as unknown as { persist(): void }).persist();

@@ -299,6 +299,11 @@ export async function handleMachineRequest(request: Request, manager: MachineMan
       setRequestRoute("/api/machines/:machine_id");
       const patch = await request.json();
       if (!isJsonObject(patch)) return fail("invalid_body", "Expected a PC update", 400);
+      // stopping a PC is this app's own choice, also for a PC herdr manages: it is never a change to the PC
+      if (patch["paused"] !== undefined) {
+        if (typeof patch["paused"] !== "boolean" || Object.keys(patch).length > 1) return fail("invalid_body", "paused is a boolean, sent alone", 400);
+        return jsonResponse(manager.setPaused(id, patch["paused"]));
+      }
       manager.patch(id, patch); return jsonResponse({ ok: true });
     }
     if (parts.length === 1 && request.method === "DELETE") { setRequestRoute("/api/machines/:machine_id"); manager.remove(id); return jsonResponse({ ok: true }); }

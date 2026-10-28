@@ -26,6 +26,8 @@ export interface Machine {
   error: string | null;
   /** Attention needed; windows_login retries, windows_start_failed waits for a startup decision. */
   action_required?: MachineAction | null;
+  /** set when connecting to this PC is stopped (MachineSettings.paused_all / paused_machines): nothing reconnects it */
+  paused?: boolean;
   /** a bridge update running for this PC right now (in the background, or from its dialog) */
   updating?: MachineUpdate | null;
   /** the PC's latest roster as its server read it, with that read's order_epoch/read_seq copied unchanged */
@@ -93,9 +95,17 @@ export interface MachineUpdate { job_id: string; step: string; progress: SetupPr
  * rate is bytes per second over the stage so far; elapsed_ms is how long the stage has run.
  */
 export interface SetupProgress { stage: "download" | "upload" | "install" | "restart"; done: number; total: number | null; rate: number | null; elapsed_ms: number }
+/** a setup refused because connecting to its PC is stopped (MachineSettings.paused_all / paused_machines) */
+export const STOPPED_CONNECTING = "Connecting to this PC is stopped. Resume connecting first.";
 /** Server-side PC preferences (machine-settings.json in the state directory). */
 export interface MachineSettings {
   auto_update_bridges: boolean;
+  /**
+   * Stop connecting: no SSH to any remote PC (paused_all), or to the PCs named by id (paused_machines),
+   * until it is lifted. Running setups are cancelled and nothing retries; the Host's own PC is never paused.
+   */
+  paused_all: boolean;
+  paused_machines: string[];
   /**
    * The Host's saved-PC files (machines.json, herdr-profile-state.json) that were not JSON when
    * this server started, by the name each was moved to beside them; absent when none was. Read

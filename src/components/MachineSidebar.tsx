@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, type FocusEvent, type KeyboardEvent } from "react";
 import { ChevronDown, ChevronRight, Download, Monitor, Plus, Settings, SlidersHorizontal, X } from "lucide-react";
-import { OWN_UPDATE_OFFER, type Machine, type MachineState, type MachineUpdate, type RemoteOvis } from "../../shared/machines.ts";
+import { OWN_UPDATE_OFFER, type Machine, type MachineSettings, type MachineState, type MachineUpdate, type RemoteOvis } from "../../shared/machines.ts";
 import { copyText } from "../lib/clipboard.ts";
 import { MachineContext } from "../lib/machineContext.tsx";
 import { answerMachineSetup, machineRequest } from "../lib/api.ts";
@@ -179,6 +179,7 @@ export function MachineSidebar(props: Props) {
       {query !== "" ? <button type="button" className="sidebar-filter-clear" aria-label={t("Clear filter")} title={t("Clear filter")} onClick={clearFilter}><X aria-hidden="true" /></button>
         : closable && <button type="button" className="sidebar-filter-clear" aria-label={t("Close filter")} title={t("Close filter")} onClick={closeFilter}><X aria-hidden="true" /></button>}
     </div>}
+    <StopConnecting machines={props.machines} />
     <div className="machine-list" aria-label={t("PCs and workspaces")}>
       <p className={noMatchWords === null ? "visually-hidden" : "tree-state sidebar-filter-empty"} role="status">{noMatchWords}</p>
       {props.machines.map((machine) => <MachineGroup key={machine.id} {...props} machine={machine} headerless={machine.id === loneHost} />)}
@@ -211,11 +212,11 @@ function MachineGroup({ machine, headerless = false, ...props }: Props & { machi
   const [error, setError] = useState<string | null>(null);
   const online = machine.state === "connected";
   // a PC that waits on the user, or is updating, shows its notice in the state line's place
-  const noticed = Boolean(machine.action_required || machine.updating);
+  const noticed = !machine.paused && Boolean(machine.action_required || machine.updating);
   // the state line under the name is a live region in the group from its first render, kept through the
   // notice (clipped and empty while it shows): its word lands a frame after the line (lib/useAnnouncedText.ts),
   // and every later state change, or the notice clearing, at once
-  const stateWord = useAnnouncedText(noticed ? null : t(STATE_WORD[machine.state]));
+  const stateWord = useAnnouncedText(noticed ? null : t(machine.paused ? "Connecting stopped" : STATE_WORD[machine.state]));
   // the Host's herdr is away (the server's words name the socket it tried): the step to take is on
   // that PC, not in this browser, so it follows the words
   const nextStep = !noticed && machine.kind === "local" && machine.error !== null && saysHerdrAway(machine.error) ? t("Start herdr on this PC, or check HERDR_SOCKET.") : null;
@@ -285,8 +286,10 @@ function MachineGroup({ machine, headerless = false, ...props }: Props & { machi
       {/* The first removal click only arms the action; the second is destructive. */}
       <div className="machine-control-buttons">
         {!machine.herdr_profile_id && <button className="btn" disabled={busy !== null} onClick={() => void mutate("PATCH", { enabled: !machine.enabled })}>{t(machine.enabled ? "Disconnect" : "Connect")}</button>}
-        {!["setup", "connect"].includes(machine.action_required ?? "") && <button className="btn" disabled={!machine.enabled || !machine.target} onClick={() => props.onSetup(machine)}>{t("Reconnect / setup")}</button>}
-        {machine.action_required !== "connect" && <button className="btn" disabled={!machine.enabled || !machine.target} onClick={() => props.onSetup(machine, true)}>{t("Update bridge…")}</button>}
+        {/* this app's own choice, also for a PC herdr manages: nothing connects to it until it is resumed */}
+        {machine.kind === "ssh" && <button className={`btn${machine.paused ? "" : " btn-danger"}`} disabled={busy !== null} onClick={() => void mutate("PATCH", { paused: !machine.paused })}>{t(machine.paused ? "Resume connecting" : "Stop connecting")}</button>}
+        {!["setup", "connect"].includes(machine.action_required ?? "") && <button className="btn" disabled={!machine.enabled || !machine.target || machine.paused} onClick={() => props.onSetup(machine)}>{t("Reconnect / setup")}</button>}
+        {machine.action_required !== "connect" && <button className="btn" disabled={!machine.enabled || !machine.target || machine.paused} onClick={() => props.onSetup(machine, true)}>{t("Update bridge…")}</button>}
         {!machine.herdr_profile_id && <button className="btn btn-danger" disabled={busy !== null} aria-busy={busy === "DELETE" || undefined} onClick={() => { if (confirmDelete) void mutate("DELETE"); else setConfirmDelete(true); }}>{t(confirmDelete ? "Confirm remove PC" : "Remove PC")}</button>}
       </div>
       {confirmDelete && <p className="field-hint">{t("Removes this registration. Remote sessions keep running.")}</p>}
@@ -303,6 +306,34 @@ function MachineGroup({ machine, headerless = false, ...props }: Props & { machi
 }
 
 /** Seconds since the stage began, ticking on this device: install and restart have no bytes to show. */
+/**
+ * Stop connecting, for every remote PC at once: a stop the user reaches without opening anything, for when
+ * reaching the PCs keeps failing (a jump host that asks for a code, a network that blocks retries). A PC stopped
+ * on its own is counted, with the way back for all of them; each PC's own stop is in its Manage PC panel.
+ */
+function StopConnecting({ machines }: { machines: Machine[] }) {
+  const t = useT();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const remotes = machines.filter((machine) => machine.kind === "ssh");
+  if (remotes.length === 0) return null;
+  const stopped = remotes.filter((machine) => machine.paused).length;
+  const run = async (patch: Partial<MachineSettings>) => {
+    setBusy(true);
+    try { await machineRequest("/settings", "PATCH", patch); setError(null); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setBusy(false); }
+  };
+  return <div className={`machine-stop${stopped > 0 ? " is-stopped" : ""}`}>
+    {stopped > 0 && <p className="machine-stop-text" role="status">{stopped === remotes.length ? t("Connecting stopped for every PC") : t("Connecting stopped for {n} of {total} PCs", { n: stopped, total: remotes.length })}</p>}
+    <div className="machine-stop-buttons">
+      {stopped < remotes.length && <button type="button" className="btn btn-danger" disabled={busy} onClick={() => void run({ paused_all: true })}>{t("Stop connecting")}</button>}
+      {stopped > 0 && <button type="button" className="btn" disabled={busy} onClick={() => void run({ paused_all: false, paused_machines: [] })}>{t("Resume all")}</button>}
+    </div>
+    {error && <p className="machine-error" role="alert">{error}</p>}
+  </div>;
+}
+
 function useStageSeconds(update: MachineUpdate): number {
   const key = `${update.job_id}:${update.progress?.stage ?? ""}`;
   const [start, setStart] = useState(() => ({ key, at: Date.now() - (update.progress?.elapsed_ms ?? 0) }));

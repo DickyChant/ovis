@@ -56,6 +56,31 @@
   .machine-hidden-note { min-height: var(--touch-target); }
 }
 
+/* Stop connecting (MachineSidebar's StopConnecting): one row above the PCs; red while any PC is stopped */
+.machine-stop {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0 0 var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-2) calc(var(--side-gutter) + var(--side-box));
+}
+
+.machine-stop.is-stopped {
+  background: var(--danger-tint);
+  color: var(--danger-text);
+}
+
+.machine-stop-text {
+  margin: 0;
+  font-size: var(--fs-xs);
+  font-weight: 600;
+}
+
+.machine-stop-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
 .machine-group {
   --machine-indent: calc(var(--side-gutter) + var(--side-box));
 }
